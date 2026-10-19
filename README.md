@@ -83,6 +83,22 @@ open apps/macos/build/autohan0.app
   4. 인증서로 바꾼 첫 빌드에서만 위처럼 권한을 한 번 더 지우고 다시 넣으면, 그다음 빌드부터는 그대로 유지됩니다.
 - **다른 한/영 전환 앱과 같이 켜지 마세요.** gksdud처럼 키를 가로채는 앱이 함께 돌면 키 입력이 겹칩니다. 메뉴에도 경고가 뜹니다.
 
+### 배포판(DMG) 만들기
+
+Developer ID 인증서가 키체인에 있고 공증 자격 증명을 한 번 저장해 두면, 스크립트 하나로 서명·공증된 DMG가 나옵니다.
+
+```bash
+xcrun notarytool store-credentials "autohan0-notary" --apple-id <Apple ID> --team-id <팀 ID>
+```
+
+앱 암호(appleid.apple.com › 로그인 및 보안 › 앱 암호)를 물으면 입력합니다. 그다음:
+
+```bash
+apps/macos/release.sh
+```
+
+빌드 → Developer ID 서명(hardened runtime) → 앱 공증·스테이플 → DMG(앱 + Applications 바로가기) → DMG 서명·공증·스테이플 → `apps/macos/dist/autohan0-<버전>.dmg`와 SHA-256 파일. 공증 없이 DMG만 보려면 `--no-notarize`. 버전은 `Resources/Info.plist`의 `CFBundleShortVersionString`입니다.
+
 ### 동작
 
 - **키 가로채기**: `CGEventTap`(세션 단계)으로 keyDown을 받아 물리 키 + Shift를 QWERTY 문자로 바꿔 엔진(`HostAdapter`, `packages/engine/src/host.ts`)에 넘깁니다. 엔진이 고친 결과(`edit`)가 원래 키가 낼 글자와 같으면 원래 키를 그대로 보내고, 다르면 원래 키를 삼키고 백스페이스 n번 + 유니코드 문자열 입력 이벤트를 만들어 보냅니다(`CGEventTapPostEvent`라서 뒤에 친 키보다 먼저 도착). 엔터는 고친 뒤 원래 엔터를 다시 보내고 새로 시작합니다.
