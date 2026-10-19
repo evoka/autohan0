@@ -28,16 +28,27 @@ cp "$BIN" "$APP/Contents/MacOS/autohan0"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/autohan0-engine.js "$APP/Contents/Resources/"
 
+# 서명 순서: $AUTOHAN0_SIGN_IDENTITY → 키체인의 "Developer ID Application" → "autohan0 local signing" → ad hoc
 LOCAL_IDENTITY="autohan0 local signing"
 IDENTITY="${AUTOHAN0_SIGN_IDENTITY:-}"
+IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
 if [ -z "$IDENTITY" ]; then
-  if security find-identity -p codesigning 2>/dev/null | grep -q "\"$LOCAL_IDENTITY\""; then
+  DEV_ID="$(printf '%s\n' "$IDENTITIES" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"' || true)"  # pipefail: no match is fine
+  if [ -n "$DEV_ID" ]; then
+    IDENTITY="$DEV_ID"
+  elif printf '%s\n' "$IDENTITIES" | grep -q "\"$LOCAL_IDENTITY\""; then
     IDENTITY="$LOCAL_IDENTITY"
   else
     IDENTITY="-"
   fi
 fi
-if [ "$IDENTITY" = "-" ]; then echo "▸ 서명 (ad hoc: 빌드할 때마다 손쉬운 사용 권한을 다시 받아야 함)"; else echo "▸ 서명 ($IDENTITY)"; fi
-codesign --force --sign "$IDENTITY" --entitlements Resources/autohan0.entitlements "$APP"
+SIGN_OPTS=""
+case "$IDENTITY" in
+  -) echo "▸ 서명 (ad hoc: 빌드할 때마다 손쉬운 사용 권한을 다시 받아야 함)" ;;
+  "Developer ID Application:"*) echo "▸ 서명 ($IDENTITY, hardened runtime + timestamp)"; SIGN_OPTS="--options runtime --timestamp" ;;
+  *) echo "▸ 서명 ($IDENTITY)" ;;
+esac
+# shellcheck disable=SC2086
+codesign --force --sign "$IDENTITY" $SIGN_OPTS --entitlements Resources/autohan0.entitlements "$APP"
 codesign --verify --strict "$APP"
 echo "완료: $(pwd)/$APP"

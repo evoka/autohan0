@@ -67,7 +67,9 @@ open apps/macos/build/autohan0.app
 
 - 처음 띄우면 **손쉬운 사용** 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 autohan0을 켜면 몇 초 안에 메뉴바가 흐린 `가A`에서 `가` 또는 `A`로 바뀝니다(다시 띄울 필요 없음). 메뉴 맨 위 줄이 `자동 변환 중 · …`이면 동작 중입니다.
 - **다시 빌드하면 권한이 풀립니다.** ad hoc 서명은 빌드마다 서명이 달라져 macOS가 다른 앱으로 봅니다. 목록에서 스위치를 껐다 켜는 것으로는 안 되고, autohan0을 선택해 **"−"로 지운 뒤**(암호·Touch ID 확인) 메뉴의 **"손쉬운 사용 권한 켜기…"**를 눌러 다시 넣고 켜야 합니다. **자주 빌드한다면 자체 서명 인증서를 한 번 만들어 두세요.** 그러면 빌드 사이에 권한이 유지됩니다.
-  가장 쉬운 방법은 스크립트 한 번 실행입니다(로그인 키체인에 자체 서명 인증서를 만들고 코드 서명용으로 신뢰 설정, 암호 확인 창이 뜰 수 있음):
+  **Apple Developer 계정이 있으면** Developer ID Application 인증서를 키체인에 넣어 두세요. `build.sh`가 그 인증서를 먼저 찾아 hardened runtime과 타임스탬프를 붙여 서명하고, 권한은 빌드 사이에 유지됩니다(공증은 배포할 때만 `xcrun notarytool`로 따로). Xcode › Settings › Accounts › 팀 선택 › Manage Certificates… › "+" › **Developer ID Application**을 누르면 인증서가 만들어져 로그인 키체인에 들어갑니다. `security find-identity -v -p codesigning`에 보이면 됩니다.
+
+  계정이 없으면 자체 서명 인증서를 씁니다. 가장 쉬운 방법은 스크립트 한 번 실행입니다(로그인 키체인에 자체 서명 인증서를 만들고 코드 서명용으로 신뢰 설정, 암호 확인 창이 뜰 수 있음):
 
   ```bash
   apps/macos/make-signing-cert.sh
