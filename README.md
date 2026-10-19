@@ -57,7 +57,7 @@ Xcode(또는 Command Line Tools, Swift 5.9 이상)와 Node가 필요합니다. �
 apps/macos/build.sh
 ```
 
-`apps/macos/build/autohan0.app`이 생깁니다. 스크립트는 ① 엔진과 단어 데이터를 JS 파일 하나로 묶고(`npm run build:jsc` → `apps/macos/Resources/autohan0-engine.js`, 약 1.1MB) ② `swift build -c release` ③ 앱 번들을 만들어 ④ 로컬 서명합니다(아래 `autohan0 local signing` 인증서가 있으면 그것으로, 없으면 ad hoc). 공증·배포는 하지 않습니다.
+`apps/macos/build/autohan0.app`이 생깁니다. 스크립트는 ① 엔진과 단어 데이터를 JS 파일 하나로 묶고(`npm run build:jsc` → `apps/macos/Resources/autohan0-engine.js`, 약 1.1MB) ② `swift build -c release` ③ 앱 번들을 만들어 ④ 서명합니다(키체인의 Developer ID Application → `autohan0 local signing` → 없으면 ad hoc 순). 공증·배포는 하지 않습니다.
 
 ### 실행과 권한
 
