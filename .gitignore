@@ -1,0 +1,11 @@
+node_modules/
+dist/
+# downloaded sources (re-created by scripts/build_data.py / scripts/fetch_eval_data.sh)
+data/raw/
+.DS_Store
+# build outputs (apps/macos/build.sh re-creates them)
+apps/macos/build/
+apps/macos/.build/
+apps/macos/Resources/autohan0-engine.js
+apps/macos/Resources/autohan-engine.js
+.venv/

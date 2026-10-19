@@ -1,0 +1,205 @@
+// Scores one word's key sequence as English (QWERTY), Korean (Sebeolsik), or
+// English followed by a Korean particle/ending (AI로, deploy했는데).
+// All scores are natural-log probabilities of the same key sequence under each
+// language, so they can be compared directly.
+
+import { isChoOnly, isCompleteSyllable, type Unit } from './hangul';
+import type { Layout } from './layout';
+import type { LangModel, Models } from './models';
+
+export const NEG = -1e9; // "impossible"
+
+const LOG = Math.log;
+// A number token is ~1-2% of words; each digit is one of ten.
+const DIGIT_START = LOG(0.002);
+const DIGIT_NEXT = LOG(0.15);
+const LETTER_DIGIT_EN = LOG(0.05); // v2, mp3, h264
+const HANGUL_DIGIT = LOG(0.3);
+const RUN_SPLIT = LOG(0.2); // extra word-like run inside one token (build.sh)
+// Korean part after an English word: mostly particles / endings (AI로, deploy했는데),
+// sometimes a noun (for문).
+const SUFFIX_JOSA = 0.85;
+
+function punctCost(ch: string, lead: boolean): number {
+  if (lead) {
+    if ('([{"\'“‘<'.includes(ch)) return -4.5;
+    if ('#@$~*-./`'.includes(ch)) return -5.5;
+    return -8;
+  }
+  if (',.?!'.includes(ch)) return -3.5;
+  if (')]}"\'”’:;…·'.includes(ch)) return -4.5;
+  if ('/_-@#+=&*%~>'.includes(ch)) return -5.5;
+  return -8;
+}
+
+const isDigit = (c: string) => c >= '0' && c <= '9';
+const isLower = (c: string) => c >= 'a' && c <= 'z';
+const isUpper = (c: string) => c >= 'A' && c <= 'Z';
+const isLetter = (c: string) => isLower(c) || isUpper(c);
+
+/** log P(word) (complete) or log P(word starts with prefix) under lexicon + n-gram mixture. */
+export function wordLogProb(m: LangModel, key: string, complete: boolean): number {
+  const dict = complete ? m.lex.freq(key) : m.lex.prefixMass(key);
+  const lm = m.logUncovered + m.lm.logProb(key, complete);
+  if (dict <= 0) return lm;
+  const a = LOG(dict);
+  return a > lm ? a + Math.log1p(Math.exp(lm - a)) : lm + Math.log1p(Math.exp(a - lm));
+}
+
+function caseCost(run: string): number {
+  let up = 0;
+  for (const c of run) if (isUpper(c)) up++;
+  if (up === 0) return 0;
+  if (run.length === 1) return LOG(0.3);
+  if (up === run.length) return LOG(0.02);
+  if (up === 1 && isUpper(run[0])) return LOG(0.15);
+  // camelCase / iPhone / GitHub are real but rare; short ones (kG, jGkd) are
+  // almost always Sebeolsik Shift keys (ㅒ, compound finals) typed in English mode.
+  return run.length >= 5 ? LOG(0.003) : LOG(1e-4);
+}
+
+/** True for tokens like TV, README, PR, Q4 (2+ letters, all uppercase). */
+export function isAllCapsToken(s: string): boolean {
+  let letters = 0;
+  for (const c of s) {
+    if (isLower(c)) return false;
+    if (isUpper(c)) letters++;
+  }
+  return letters >= 2;
+}
+
+export class Scorer {
+  private readonly memoEn = new Map<string, number>();
+
+  constructor(readonly models: Models) {}
+
+  /** English (QWERTY) reading of the keys. */
+  scoreEn(s: string, complete: boolean): number {
+    const memoKey = (complete ? '$' : '^') + s;
+    const hit = this.memoEn.get(memoKey);
+    if (hit !== undefined) return hit;
+    let lp = 0;
+    let i = 0;
+    let seenAlnum = false;
+    let runs = 0;
+    let prevKind = '';
+    while (i < s.length) {
+      const c = s[i];
+      if (isLetter(c)) {
+        let j = i + 1;
+        // letters with internal apostrophes (don't, it's)
+        while (j < s.length && (isLetter(s[j]) || (s[j] === "'" && j + 1 < s.length && isLetter(s[j + 1])))) j++;
+        const run = s.slice(i, j);
+        const isLast = j >= s.length;
+        lp += wordLogProb(this.models.en, run.toLowerCase(), complete || !isLast) + caseCost(run);
+        if (prevKind === 'digit') lp += LETTER_DIGIT_EN;
+        else if (runs > 0) lp += RUN_SPLIT;
+        runs++;
+        prevKind = 'letter';
+        seenAlnum = true;
+        i = j;
+      } else if (isDigit(c)) {
+        let j = i + 1;
+        while (j < s.length && isDigit(s[j])) j++;
+        lp += DIGIT_START + (j - i - 1) * DIGIT_NEXT;
+        if (prevKind === 'letter') lp += LETTER_DIGIT_EN;
+        prevKind = 'digit';
+        seenAlnum = true;
+        i = j;
+      } else {
+        lp += punctCost(c, !seenAlnum);
+        prevKind = 'punct';
+        i++;
+      }
+    }
+    if (this.memoEn.size > 20000) this.memoEn.clear();
+    this.memoEn.set(memoKey, lp);
+    return lp;
+  }
+
+  /**
+   * Korean (Sebeolsik) reading. Returns NEG when the jamo do not form syllables
+   * (orphan vowel / final consonant, initial consonant without vowel), except a
+   * trailing initial consonant while the word is still being typed.
+   * `asSuffix` scores the first Hangul run as a particle/ending after English.
+   */
+  scoreKo(units: Unit[], complete: boolean, asSuffix = false): number {
+    const ko = this.models.ko;
+    const comb = this.models.comb;
+    if (units.length === 0) return 0;
+    const emo = jamoEmoticon(units);
+    if (emo !== null) return emo;
+    let lp = 0;
+    let i = 0;
+    let seenAlnum = false;
+    let prevKind = '';
+    let firstRun = true;
+    while (i < units.length) {
+      const u = units[i];
+      if (!u.sym) {
+        let j = i;
+        let key = '';
+        while (j < units.length && !units[j].sym) {
+          const v = units[j];
+          const last = j === units.length - 1;
+          if (!isCompleteSyllable(v) && !(last && !complete && isChoOnly(v))) return NEG;
+          key += comb.canonical(v.cho) + (v.jung ? comb.canonical(v.jung) : '') + (v.jong ? comb.canonical(v.jong) : '');
+          j++;
+        }
+        const isLast = j >= units.length;
+        const c = complete || !isLast;
+        let w = wordLogProb(ko, key, c);
+        // after English (AI로) or a number (3시), Hangul is mostly a particle / counter
+        if ((asSuffix && firstRun) || prevKind === 'digit') {
+          const josa = c ? this.models.josa.freq(key) : this.models.josa.prefixMass(key);
+          const gen = Math.exp(w);
+          w = LOG(SUFFIX_JOSA * josa + (1 - SUFFIX_JOSA) * gen + 1e-300);
+        }
+        lp += w;
+        if (prevKind !== 'digit' && !firstRun) lp += RUN_SPLIT;
+        firstRun = false;
+        prevKind = 'hangul';
+        seenAlnum = true;
+        i = j;
+      } else if (isDigit(u.sym)) {
+        let j = i + 1;
+        while (j < units.length && units[j].sym && isDigit(units[j].sym)) j++;
+        lp += DIGIT_START + (j - i - 1) * DIGIT_NEXT;
+        if (prevKind === 'hangul') lp += HANGUL_DIGIT; // 제3장, 1월2일
+        prevKind = 'digit';
+        seenAlnum = true;
+        i = j;
+      } else {
+        lp += punctCost(u.sym, !seenAlnum);
+        prevKind = 'punct';
+        i++;
+      }
+    }
+    return lp;
+  }
+
+  /** English prefix keys[0:at] (complete) + Korean suffix keys[at:]. */
+  scoreSplit(keys: string, at: number, layout: Layout, complete: boolean, switchLogProb: number): number {
+    const head = keys.slice(0, at);
+    const en = this.scoreEn(head, true);
+    if (en <= NEG / 2) return NEG;
+    // The head must read better as English than as a Korean word by itself:
+    // "hr" + 친구에게 is really 내친구에게, "lt" + 이 is 저이.
+    if (this.scoreKo(layout.compose(head), true) >= en) return NEG;
+    const tail = layout.compose(keys.slice(at));
+    const ko = this.scoreKo(tail, complete, true);
+    if (ko <= NEG / 2) return NEG;
+    return en + switchLogProb + ko;
+  }
+}
+
+// ㅋㅋ, ㅎㅎ, ㅠㅠ, ㅜㅜ, ㅡㅡ, ㅇㅇ, ㄴㄴ, ㄷㄷ: lone jamo repeated (2+ units).
+const EMO_JAMO = new Set(['ᄏ', 'ᄒ', 'ᅲ', 'ᅮ', 'ᅳ', 'ᄋ', 'ᄂ', 'ᄃ']);
+function jamoEmoticon(units: Unit[]): number | null {
+  if (units.length < 2) return null;
+  for (const u of units) {
+    const j = u.sym ? '' : isChoOnly(u) ? u.cho : !u.cho && u.jung && !u.jong ? u.jung : '';
+    if (!j || !EMO_JAMO.has(j)) return null;
+  }
+  return LOG(2e-4) + (units.length - 2) * LOG(0.5);
+}

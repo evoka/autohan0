@@ -1,0 +1,14 @@
+{
+  "name": "@autohan0/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@autohan0/engine": "*"
+  }
+}

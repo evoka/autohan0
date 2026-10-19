@@ -1,0 +1,25 @@
+{
+  "name": "autohan0",
+  "private": true,
+  "version": "0.1.0",
+  "description": "세벌식 한/영 자동 전환 엔진과 브라우저 데모",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:layouts": "node scripts/build_layouts.mjs",
+    "build:data": "python3 -I scripts/build_data.py",
+    "test": "npm test -w @autohan0/engine",
+    "bench": "npm run bench -w @autohan0/engine",
+    "dev": "npm run dev -w @autohan0/web",
+    "build": "npm run build -w @autohan0/web",
+    "typecheck": "tsc -p packages/engine && tsc -p apps/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
