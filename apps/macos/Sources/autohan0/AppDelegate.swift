@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.terminate(nil) // already running
             return
         }
-        statusItem = NSStatusBar.system.statusItem(withLength: 30)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength) // 22pt, same as other menu bar icons
         statusItem.button?.imagePosition = .imageOnly
         menu.delegate = self
         menu.autoenablesItems = false
@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         para.alignment = .center
         func title(_ s: String, dim: Bool) -> NSAttributedString {
             NSAttributedString(string: s, attributes: [
-                .font: dim ? NSFont.systemFont(ofSize: 12, weight: .medium) : font,
+                .font: dim ? NSFont.systemFont(ofSize: 11, weight: .medium) : font, // 가A must fit in 22pt
                 .foregroundColor: dim ? NSColor.labelColor.withAlphaComponent(0.35) : NSColor.labelColor,
                 .paragraphStyle: para,
                 .baselineOffset: dim ? 0.5 : 0,
