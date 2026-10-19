@@ -297,6 +297,10 @@ python3 -m venv .venv && .venv/bin/pip install wordfreq
 
 한글 문장의 세벌식 최종 키열은 `python3 -I scripts/sebeol_keys.py "문장"`(또는 엔진의 `textToKeys`)로 만들 수 있습니다.
 
+## 만든 사람
+
+이 프로젝트는 Claude Fable 5.1(조사·설계·검증)과 Claude Opus 5.5(구현)와 함께 만들었습니다. 커밋의 `Co-Authored-By`가 그 기록입니다.
+
 ## 라이선스
 
 코드는 [MIT](LICENSE)입니다. 생성 데이터는 원본 조건을 따릅니다: `packages/engine/src/generated/en.json`·`ko.json`은 CC BY-SA 4.0, `layouts.json`과 `data/libhangul/`은 LGPL-2.1. 자세한 출처는 [data/SOURCES.md](data/SOURCES.md)에 있습니다.
