@@ -327,6 +327,24 @@ describe('숫자·따옴표 머리 + 한글 꼬리', () => {
     expect(new Engine({ mode: 'ko', layout: '39' }).type('i9tyfk/~ ').text).toBe('뭐라고~ ');
   });
 
+  it.each(['https://github.com/evoka/autohan0', '~/Work/jfshea', './build.sh', '../src', '/usr/local/bin', 'user@host', 'www.naver.com', 'localhost:3000'])(
+    'URL·경로는 두 모드에서 그대로: %s',
+    (keys) => {
+      expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(keys + ' ');
+      expect(new Engine({ mode: 'ko' }).type(keys + ' ').text).toBe(keys + ' ');
+    },
+  );
+
+  it('마침표·ㅗ 키 하나는 URL이 아니다 (jfshea. → 안녕., AIy/ → AI로)', () => {
+    expect(new Engine({ mode: 'en' }).type('jfshea. ').text).toBe('안녕. ');
+    expect(new Engine({ mode: 'en' }).type('AIy/ ').text).toBe('AI로 ');
+  });
+
+  it('@가 자모인 자판(최종: ㄺ)에서는 주소 규칙을 쓰지 않는다', () => {
+    expect(new Engine({ mode: 'en' }).type('jd@jt2uf ').text).toBe('읽었다 ');
+    expect(new Engine({ mode: 'ko', layout: '39' }).type('kim@naver.com ').text).toBe('kim@naver.com ');
+  });
+
   it('가 모드의 Shift 숫자는 그대로 (KHK:hes → 2024년, OK → 82)', () => {
     expect(new Engine({ mode: 'ko' }).type('KHK:hes ').text).toBe('2024년 ');
     expect(new Engine({ mode: 'ko' }).type('OK ').text).toBe('82 ');

@@ -7,7 +7,7 @@
 
 import { getLayout, type Layout, type LayoutId } from './layout';
 import { buildModels, type EngineData } from './models';
-import { NEG, Scorer, isAllCapsToken } from './scorer';
+import { NEG, Scorer, isAllCapsToken, isUrlLike } from './scorer';
 
 export type Lang = 'ko' | 'en';
 
@@ -458,6 +458,8 @@ export class Engine {
     const keys = w.keys;
     const out: Cand[] = [];
     out.push({ interp: EN, score: this.scorer.scoreEn(keys, complete) });
+    // https://…, ~/Work/…, user@host: typed as is, whatever the mode
+    if (isUrlLike(keys, this.layout)) return out;
     // TV, README, PR typed in English mode stay English. (In Korean mode the
     // Shift row of Sebeolsik Final gives digits, e.g. KHK: = 2024.)
     const enTyped = w.typedMode === 'en';

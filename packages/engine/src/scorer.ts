@@ -78,6 +78,17 @@ function caseCost(run: string): number {
   return run.length >= 5 ? LOG(0.003) : LOG(1e-4);
 }
 
+/**
+ * A URL, path or address typed as one token: never read as Korean. A lone `.` or `/` is not
+ * enough (안녕., AI로 where `/` is ㅗ): it takes `://`, a leading www. ~/ ./ ../ localhost:,
+ * a /dir/ path, or x@y — the last only where `@` is a symbol on the layout (on Sebeolsik Final
+ * it is ㄺ받침: jd@jt2uf is 읽었다).
+ */
+export function isUrlLike(keys: string, layout: Layout): boolean {
+  if (/:\/\//.test(keys) || /^(www\.|~\/|\.\.?\/|localhost:)/.test(keys) || /^\/[^/]+\//.test(keys)) return true;
+  return jamoKind(layout.value('@')) === 'sym' && /[A-Za-z0-9]@[A-Za-z0-9]/.test(keys);
+}
+
 /** True for tokens like TV, README, PR, Q4 (2+ letters, all uppercase). */
 export function isAllCapsToken(s: string): boolean {
   let letters = 0;
