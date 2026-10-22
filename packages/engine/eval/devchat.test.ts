@@ -3,7 +3,8 @@
 // Run: npx vitest run --config vitest.eval.config.ts
 
 import { test } from 'vitest';
-import { Engine, textToKeys, type Lang } from '../src/index';
+import { Engine } from '../src/index';
+import { runSentences, type SentenceStat } from './harness';
 
 const EN = `run npm install and then npm run build
 the API returns a JSON object with id and name
@@ -88,40 +89,13 @@ API 문서 업데이트 했어요
 고마워요
 수고하셨습니다`.split('\n');
 
-function keysFor(sentence: string): string {
-  return sentence
-    .split(' ')
-    .map((w) => (/[가-힣]/.test(w) ? w.replace(/[가-힣?!.,]+/g, (k) => textToKeys(k)) : w))
-    .join(' ');
-}
-
-function run(engine: Engine, sentences: string[], mode: Lang, toKeys: (s: string) => string) {
-  let words = 0;
-  let wrong = 0;
-  const bad: string[] = [];
-  for (const s of sentences) {
-    engine.process({ type: 'reset' });
-    engine.setMode(mode);
-    for (const ch of toKeys(s)) engine.process(ch === ' ' ? { type: 'space' } : { type: 'key', ch });
-    const out = engine.process({ type: 'enter' }).text.replace(/\n$/, '');
-    const a = s.split(' ');
-    const b = out.split(' ');
-    words += a.length;
-    let n = 0;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
-    wrong += n;
-    if (n) bad.push(`${s}  =>  ${out}`);
-  }
-  return { words, wrong, bad };
-}
-
 test('dev chat', () => {
   const engine = new Engine();
-  const rows: Array<[string, ReturnType<typeof run>]> = [
-    ['en typed in A (should stay)', run(engine, EN, 'en', (s) => s)],
-    ['en typed in 가 (should convert)', run(engine, EN, 'ko', (s) => s)],
-    ['ko+en typed in A', run(engine, KO, 'en', keysFor)],
-    ['ko+en typed in 가', run(engine, KO, 'ko', keysFor)],
+  const rows: Array<[string, SentenceStat]> = [
+    ['en typed in A (should stay)', runSentences(engine, EN, 'en')],
+    ['en typed in 가 (should convert)', runSentences(engine, EN, 'ko')],
+    ['ko+en typed in A', runSentences(engine, KO, 'en')],
+    ['ko+en typed in 가', runSentences(engine, KO, 'ko')],
   ];
   for (const [name, r] of rows) {
     console.log(`\n## ${name}: ${r.wrong}/${r.words} wrong words`);
