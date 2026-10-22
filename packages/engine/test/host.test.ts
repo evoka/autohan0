@@ -180,4 +180,15 @@ describe('HostAdapter', () => {
     expect(f.text).toBe(ref.text);
     expect(host.engine.text.length).toBeLessThan(700);
   });
+
+  it('엄격 모드: 짧은 명령은 통과하고 긴 한글은 고친다', () => {
+    const host = new HostAdapter({ mode: 'en' });
+    host.setStrict(true);
+    const f = new Field();
+    typeKeys(host, f, 'ls -la ');
+    expect(f.text).toBe('ls -la ');
+    expect(f.consumed).toBe(0);
+    typeKeys(host, f, 'jfsheamfncj4 ');
+    expect(f.text).toBe('ls -la 안녕하세요 ');
+  });
 });

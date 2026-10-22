@@ -81,6 +81,10 @@ export interface EngineParams {
   learnThreshold: number;
   /** log-odds bonus for the as-typed reading of keys reverted once (fewer than learnThreshold times) */
   weakLearnBias: number;
+  /** strict mode (terminals): extra log-odds English-mode text needs before it is read as Korean */
+  strictMargin: number;
+  /** strict mode: English-mode tokens of up to this many keys are never read as Korean (ls, cd, git) */
+  strictShortKeys: number;
 }
 
 export interface EngineLimits {
@@ -102,6 +106,8 @@ export const DEFAULT_PARAMS: EngineParams = {
   doubleToggleMs: 400,
   learnThreshold: 2,
   weakLearnBias: 3,
+  strictMargin: 4,
+  strictShortKeys: 3,
 };
 
 export interface EngineOptions extends EngineLimits {
@@ -175,6 +181,7 @@ export class Engine {
   private words: Word[] = [];
   private lastText = '';
   private bypass = false;
+  private strict = false;
   private lastToggle: { time: number; kind: 'plain' | 'revert'; prev: Word | null } | null = null;
   private readonly revertCounts = new Map<string, number>();
   private readonly learned = new Map<string, LearnedEntry>();
@@ -270,6 +277,15 @@ export class Engine {
     this.bypass = on;
     const cur = this.current();
     if (on && cur && !cur.locked) this.lockAsShown(cur);
+  }
+
+  /**
+   * Strict mode (terminals, editors): text typed in English mode is read as Korean only with
+   * `strictMargin` more evidence, and never when it is `strictShortKeys` keys or fewer (ls, cd).
+   * Korean-mode text still comes back to English as usual.
+   */
+  setStrict(on: boolean): void {
+    this.strict = on;
   }
 
   /** Learned words (count >= learnThreshold) and words reverted fewer times (weakly biased). */
@@ -472,6 +488,8 @@ export class Engine {
     out.push({ interp: EN, score: this.scorer.scoreEn(keys, complete) });
     // https://…, ~/Work/…, user@host: typed as is, whatever the mode
     if (isUrlLike(keys, this.layout)) return out;
+    const strictEn = this.strict && w.typedMode === 'en';
+    if (strictEn && keys.length <= this.params.strictShortKeys) return out;
     // TV, README, PR typed in English mode stay English. (In Korean mode the
     // Shift row of Sebeolsik Final gives digits, e.g. KHK: = 2024.)
     const enTyped = w.typedMode === 'en';
@@ -491,6 +509,7 @@ export class Engine {
       if (s > NEG / 2 && (!best || s > best.score)) best = { interp: { lang: 'mix', at }, score: s };
     }
     if (best) out.push(best);
+    if (strictEn) for (const c of out) if (c.interp.lang !== 'en' && c.score > NEG / 2) c.score -= this.params.strictMargin;
     return out;
   }
 

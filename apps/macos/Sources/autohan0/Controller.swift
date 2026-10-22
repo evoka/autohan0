@@ -112,6 +112,12 @@ final class Controller: NSObject {
         return settings.excludedApps.contains(id)
     }
 
+    /// Terminals and the like: English-mode text becomes Korean only with more evidence (Engine.setStrict).
+    var isStrict: Bool {
+        guard let id = frontApp?.bundleIdentifier else { return false }
+        return settings.strictApps.contains(id)
+    }
+
     var state: State {
         if loadError != nil { return .failed }
         if bridge == nil { return .loading }
@@ -206,6 +212,7 @@ final class Controller: NSObject {
         let s = state
         let prev = lastState
         lastState = s
+        bridge?.setStrict(isStrict)
         if s != prev {
             switch s {
             case .active:
@@ -358,6 +365,16 @@ final class Controller: NSObject {
             settings.excludedApps.remove(at: i)
         } else {
             settings.excludedApps.append(bundleID)
+        }
+        Store.save(settings)
+        applyState()
+    }
+
+    func toggleStrict(_ bundleID: String) {
+        if let i = settings.strictApps.firstIndex(of: bundleID) {
+            settings.strictApps.remove(at: i)
+        } else {
+            settings.strictApps.append(bundleID)
         }
         Store.save(settings)
         applyState()

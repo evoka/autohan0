@@ -6,8 +6,15 @@ struct Settings: Codable, Equatable {
     var layout = "3f"
     /// bundle identifiers of apps where autohan0 steps aside
     var excludedApps: [String] = []
+    /// bundle identifiers of apps where English-mode text is turned into Korean only with more evidence (terminals)
+    var strictApps: [String] = Settings.defaultStrictApps
     /// Shift+Space also works as the Han/Yeong key
     var shiftSpaceToggle = false
+
+    static let defaultStrictApps = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty", "dev.warp.Warp-Stable",
+        "org.alacritty", "net.kovidgoyal.kitty", "com.github.wez.wezterm",
+    ]
 
     init() {}
 
@@ -17,6 +24,7 @@ struct Settings: Codable, Equatable {
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
         layout = try c.decodeIfPresent(String.self, forKey: .layout) ?? d.layout
         excludedApps = try c.decodeIfPresent([String].self, forKey: .excludedApps) ?? d.excludedApps
+        strictApps = try c.decodeIfPresent([String].self, forKey: .strictApps) ?? d.strictApps
         shiftSpaceToggle = try c.decodeIfPresent(Bool.self, forKey: .shiftSpaceToggle) ?? d.shiftSpaceToggle
     }
 }

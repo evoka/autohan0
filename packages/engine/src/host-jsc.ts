@@ -74,6 +74,9 @@ const api = {
   setBypass(on: boolean): void {
     need().engine.setBypass(on);
   },
+  setStrict(on: boolean): void {
+    need().setStrict(on);
+  },
   setShiftSpaceToggle(on: boolean): void {
     need().shiftSpaceToggle = on;
   },

@@ -254,6 +254,36 @@ describe('줄 끝 판정', () => {
   });
 });
 
+describe('엄격 모드 (터미널)', () => {
+  const strict = (mode: 'en' | 'ko') => {
+    const e = new Engine({ mode });
+    e.setStrict(true);
+    return e;
+  };
+
+  it.each([
+    ['ls', 'ls'],
+    ['nd', 'nd'],
+    ['hr', 'hr'],
+    ['kg', 'kg'],
+    ['jfshea', '안녕'],
+    ['jfsheamfncj4', '안녕하세요'],
+    ['AIy/', 'AI로'],
+  ])('A 모드: %s → %s', (keys, text) => {
+    expect(strict('en').type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it('가 모드로 친 영어는 평소대로 돌아온다', () => {
+    expect(strict('ko').type('git push ').text).toBe('git push ');
+  });
+
+  it('끄면 평소대로 (nd → 시)', () => {
+    const e = strict('en');
+    e.setStrict(false);
+    expect(e.type('nd ').text).toBe('시 ');
+  });
+});
+
 describe('학습 2단계', () => {
   /** nd␣ → 시␣, then the double Han/Yeong press restores "nd" (one revert). */
   function revertOnce(e: Engine, t: number): void {

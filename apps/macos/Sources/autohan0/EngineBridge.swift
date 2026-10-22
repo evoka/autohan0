@@ -161,6 +161,8 @@ final class EngineBridge {
 
     func setBypass(_ on: Bool) { _ = api.invokeMethod("setBypass", withArguments: [on]) }
 
+    func setStrict(_ on: Bool) { _ = api.invokeMethod("setStrict", withArguments: [on]) }
+
     func setShiftSpaceToggle(_ on: Bool) { _ = api.invokeMethod("setShiftSpaceToggle", withArguments: [on]) }
 
     func learned() -> [LearnedEntry] {

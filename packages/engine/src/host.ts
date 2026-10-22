@@ -93,6 +93,11 @@ export class HostAdapter {
     return this.action(r.edit.deleteCount > 0 || r.edit.insert !== '', r.edit.deleteCount, r.edit.insert, false);
   }
 
+  /** The front app is a terminal / editor: see Engine.setStrict. */
+  setStrict(on: boolean): void {
+    this.engine.setStrict(on);
+  }
+
   /** Mouse click, app / window switch, arrow keys: the text before the caret is unknown now. */
   caretMoved(): void {
     this.engine.process({ type: 'commit' });

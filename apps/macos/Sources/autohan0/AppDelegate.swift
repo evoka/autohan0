@@ -103,10 +103,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(submenu("한/영 키", hanYeongMenu()))
 
         if let app = controller.frontApp, let id = app.bundleIdentifier {
-            let it = item("\(app.localizedName ?? id)에서 끄기", #selector(toggleExcluded(_:)))
+            let name = app.localizedName ?? id
+            let it = item("\(name)에서 끄기", #selector(toggleExcluded(_:)))
             it.representedObject = id
             it.state = s.excludedApps.contains(id) ? .on : .off
             menu.addItem(it)
+            let strict = item("\(name)에서 엄격하게 (터미널처럼)", #selector(toggleStrict(_:)))
+            strict.representedObject = id
+            strict.state = s.strictApps.contains(id) ? .on : .off
+            strict.toolTip = "영어 상태로 친 글은 더 확실할 때만 한글로 바꾸고, 3키 이하(ls, cd)는 바꾸지 않아요"
+            menu.addItem(strict)
         }
 
         menu.addItem(submenu("배운 말", learnedMenu()))
@@ -204,6 +210,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleExcluded(_ sender: NSMenuItem) {
         if let id = sender.representedObject as? String { controller.toggleExcluded(id) }
+    }
+
+    @objc private func toggleStrict(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { controller.toggleStrict(id) }
     }
 
     @objc private func toggleShiftSpace() { controller.setShiftSpaceToggle(!controller.settings.shiftSpaceToggle) }
