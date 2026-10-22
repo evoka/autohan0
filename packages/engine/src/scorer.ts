@@ -3,7 +3,7 @@
 // All scores are natural-log probabilities of the same key sequence under each
 // language, so they can be compared directly.
 
-import { isChoOnly, isCompleteSyllable, jamoKind, type Unit } from './hangul';
+import { isChoOnly, isCompleteSyllable, jamoKind, renderUnit, type Unit } from './hangul';
 import type { Layout } from './layout';
 import type { LangModel, Models } from './models';
 
@@ -28,6 +28,12 @@ const ACRONYM_MORE = LOG(0.25);
 const SHIFT_SYMBOL_EN = LOG(0.001);
 // A one-letter label before a Korean noun (n제, x축, A팀): flat cost instead of the word "n".
 const LABEL_HEAD = LOG(0.01);
+// A letter glued to a digit in a code token (k8s, h264, 3e-4, F1), instead of the word
+// probability of "k" or "s".
+const CODE_LETTER = LOG(0.15);
+// A syllable that never occurs in the Korean word lists (긘, 뗘): the jamo n-gram alone is
+// too kind to it.
+const UNSEEN_SYLLABLE = LOG(0.01);
 
 /** log P of a 2–6 letter all-caps acronym. */
 export function acronymLogProb(len: number): number {
@@ -107,6 +113,12 @@ export class Scorer {
         const isLast = j >= s.length;
         let w = wordLogProb(this.models.en, run.toLowerCase(), complete || !isLast) + caseCost(run);
         if (run.length <= 6 && isAllCapsToken(run)) w = Math.max(w, acronymLogProb(run.length));
+        // A single letter glued to a digit is a code token (k8s, h264, 3e-4, F1), not the word
+        // "k". Longer runs are left to the word model: in Sebeolsik the digit keys are vowels
+        // (ㅜ = 9, ㅛ = 4), so "o9x" is 축 and "3kr" is 3개.
+        // ("5y/" is not: a letter after a digit counts only at the end or before another digit.)
+        const nextDigit = j < s.length && isDigit(s[j]);
+        if (run.length === 1 && (nextDigit || (prevKind === 'digit' && j >= s.length))) w = Math.max(w, CODE_LETTER);
         lp += w;
         if (prevKind === 'digit') lp += LETTER_DIGIT_EN;
         else if (runs > 0) lp += RUN_SPLIT;
@@ -155,16 +167,19 @@ export class Scorer {
       if (!u.sym) {
         let j = i;
         let key = '';
+        let unseen = 0;
         while (j < units.length && !units[j].sym) {
           const v = units[j];
           const last = j === units.length - 1;
           if (!isCompleteSyllable(v) && !(last && !complete && isChoOnly(v))) return NEG;
           key += comb.canonical(v.cho) + (v.jung ? comb.canonical(v.jung) : '') + (v.jong ? comb.canonical(v.jong) : '');
+          // the last syllable may still grow (갈 → 갉) while typing
+          if (isCompleteSyllable(v) && (complete || !last) && !this.models.seenSyllables.has(renderUnit(v))) unseen++;
           j++;
         }
         const isLast = j >= units.length;
         const c = complete || !isLast;
-        let w = wordLogProb(ko, key, c);
+        let w = wordLogProb(ko, key, c) + unseen * UNSEEN_SYLLABLE;
         // after English (AI로) or a number (3시), Hangul is mostly a particle / counter
         if ((asSuffix && firstRun) || prevKind === 'digit') {
           const josa = c ? this.models.josa.freq(key) : this.models.josa.prefixMass(key);

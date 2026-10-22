@@ -31,6 +31,8 @@ export interface Models {
   /** Korean particles/endings/counters that follow an English word or a number (AI로, deploy했는데, 3시). */
   josa: Lexicon;
   comb: Combiner;
+  /** precomposed syllables that occur in the Korean word lists (긘 is not one) */
+  seenSyllables: Set<string>;
 }
 
 export const EN_ORDER = 5;
@@ -113,7 +115,13 @@ export function buildModels(data?: EngineData): Models {
     const key = comb.canonicalWord(parts[i]);
     if (key) josaEntries.push({ key, freq: Number(parts[i + 1]) / total });
   }
-  const models: Models = { en, ko, josa: new Lexicon(josaEntries, 1), comb };
+  const seenSyllables = new Set<string>();
+  const addSyllables = (w: string) => {
+    for (const ch of w) if (ch >= '가' && ch <= '힣') seenSyllables.add(ch);
+  };
+  parseZipfGroups(d.ko.words, addSyllables);
+  if (d.ko.morphemes) parseZipfGroups(d.ko.morphemes, addSyllables);
+  const models: Models = { en, ko, josa: new Lexicon(josaEntries, 1), comb, seenSyllables };
   if (!data) cached = models;
   return models;
 }

@@ -136,6 +136,8 @@ const interpLang = (i: Interp): Lang => (i.lang === 'en' ? 'en' : 'ko');
 const sameInterp = (a: Interp, b: Interp) => a.lang === b.lang && (a.lang !== 'mix' || a.at === b.at);
 const other = (m: Lang): Lang => (m === 'ko' ? 'en' : 'ko');
 const isAlnum = (c: string) => /[A-Za-z0-9]/.test(c);
+/** A token with no letter key (2024, 3.5, ...) belongs to neither language: it is no context for its neighbours. */
+const isNeutral = (keys: string) => !/[A-Za-z]/.test(keys);
 /** The Korean tail of a mixed word may start after a letter, a digit or a closing quote / bracket ("contents"라고). */
 const isSplitBoundary = (c: string) => isAlnum(c) || '"\')]}'.includes(c);
 /**
@@ -481,10 +483,10 @@ export class Engine {
   private prior(c: Cand, w: Word): number {
     const lang = c.interp.lang === 'mix' ? 'mix' : c.interp.lang;
     let p = lang === w.typedMode ? 0 : -this.params.modePrior;
-    // Language continuity with the previous word on the same line.
+    // Language continuity with the previous word on the same line (a number is no context).
     const prev = this.previousWord(w);
     // ('mix' = English head + Korean tail continues either language.)
-    if (prev && c.interp.lang !== 'mix' && interpLang(c.interp) !== this.languageOf(prev)) p -= this.params.prevWordPrior;
+    if (prev && !isNeutral(prev.keys) && c.interp.lang !== 'mix' && interpLang(c.interp) !== this.languageOf(prev)) p -= this.params.prevWordPrior;
     return p;
   }
 
@@ -539,6 +541,8 @@ export class Engine {
   private maybeRejudgePrevious(w: Word, cands: Cand[], best: Cand): void {
     const idx = this.words.indexOf(w);
     if (idx <= 0 || !this.words[idx - 1].held) return;
+    // "2024" after a held 2024년 says nothing about the language: wait for letters.
+    if (isNeutral(w.keys)) return;
     // Confidence from the key evidence alone (no priors: those already lean
     // towards the held word's language).
     const lang = interpLang(best.interp);

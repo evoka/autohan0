@@ -44,11 +44,10 @@ export const HARD: HardCase[] = [
     '학습률은 3e-4로 두었다',
     'F1이 2.3%p 올랐다',
     '3.5인치 디스켓이다',
+    '2024년 4분기 매출',
   ),
-  ...c('number', 'known', '2024년 4분기 매출'),
   // one letter + Korean (n제, x축, B급)
-  ...c('letter', 'pass', 'n제 풀었다', 'x축 방향', 'c언어 공부', 'B급 영화', 'A팀 회의', 'S라인 유지', 'Z세대 취향', 'N호선 타고 가', 'A형 혈액'),
-  ...c('letter', 'known', 'k8s에 올렸어'),
+  ...c('letter', 'pass', 'n제 풀었다', 'x축 방향', 'c언어 공부', 'B급 영화', 'A팀 회의', 'S라인 유지', 'Z세대 취향', 'N호선 타고 가', 'A형 혈액', 'k8s에 올렸어'),
   // acronym + particle
   ...c('acronym', 'pass', 'API를 호출했는데 에러가 나', 'PR을 올렸어', 'CI가 빨간색이야', 'TV를 켰다', 'DB에서 읽어', 'QA팀에 넘겼어', 'URL만 보내줘'),
   ...enOnly(c('acronym', 'pass', 'UI같은건 싫어')),
@@ -56,8 +55,7 @@ export const HARD: HardCase[] = [
   ...c('quote', 'pass', '이것을 "contents"라고 부른다', "'Hello World'는 첫 예제다", '이 버튼을 "Submit"이라고 읽는다'),
   ...c('quote', 'known', '(참고)로 적었다'),
   // code tokens
-  ...c('code', 'pass', 'h264 코덱 써', 'mp3 파일 보내', '0xff 값 넣어', 'build.sh 돌려', 'npm test도 돌려줘'),
-  ...c('code', 'known', 'v2.0.0으로 올렸어'),
+  ...c('code', 'pass', 'h264 코덱 써', 'mp3 파일 보내', '0xff 값 넣어', 'build.sh 돌려', 'npm test도 돌려줘', 'v2.0.0으로 올렸어'),
   // URLs and paths stay as typed
   ...c(
     'url',

@@ -291,6 +291,23 @@ describe('숫자·따옴표 머리 + 한글 꼬리', () => {
     expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
   });
 
+  it.each([
+    ['k8sjc', 'k8s에'],
+    ['v2.0.0jgy/', 'v2.0.0으로'],
+    ['3e-4y/', '3e-4로'],
+    ['F1jd', 'F1이'],
+  ])('코드 토큰 머리 A: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it.each(['h264', 'mp3', '0xff', 'v2', 'build.sh', 'k8s', 'p95'])('코드 토큰은 그대로: %s', (keys) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(keys + ' ');
+  });
+
+  it('숫자 뒤 단위는 다음 단어가 약해도 보류를 푼다 (2024hes 4;9skd → 2024년 4분기)', () => {
+    expect(new Engine({ mode: 'en' }).type('2024hes 4;9skd\n').text).toBe('2024년 4분기\n');
+  });
+
   it('가 모드의 Shift 숫자는 그대로 (KHK:hes → 2024년, OK → 82)', () => {
     expect(new Engine({ mode: 'ko' }).type('KHK:hes ').text).toBe('2024년 ');
     expect(new Engine({ mode: 'ko' }).type('OK ').text).toBe('82 ');
