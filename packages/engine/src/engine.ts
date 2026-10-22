@@ -128,8 +128,11 @@ interface Word {
   typedMode: Lang;
   interp: Interp;
   locked: boolean;
-  /** as-typed rendering: mode in effect from key index `at` (manual toggles) */
-  segs: Array<{ at: number; mode: Lang }>;
+  /**
+   * as-typed rendering: mode in effect from key index `at` (manual toggles). `ascii`: a Korean
+   * segment that was typed in English mode and locked as shown keeps its ASCII symbols (뭐라고~).
+   */
+  segs: Array<{ at: number; mode: Lang; ascii?: boolean }>;
   sep: string;
   held: boolean;
 }
@@ -147,6 +150,8 @@ const other = (m: Lang): Lang => (m === 'ko' ? 'en' : 'ko');
 const isAlnum = (c: string) => /[A-Za-z0-9]/.test(c);
 /** A token with no letter key (2024, 3.5, ...) belongs to neither language: it is no context for its neighbours. */
 const isNeutral = (keys: string) => !/[A-Za-z]/.test(keys);
+/** Symbols only (>, |, >>, &&, -): shell syntax in a terminal. */
+const isSymbolsOnly = (keys: string) => !/[A-Za-z0-9]/.test(keys);
 /** The Korean tail of a mixed word may start after a letter, a digit or a closing quote / bracket ("contents"라고). */
 const isSplitBoundary = (c: string) => isAlnum(c) || '"\')]}'.includes(c);
 /**
@@ -488,6 +493,8 @@ export class Engine {
     out.push({ interp: EN, score: this.scorer.scoreEn(keys, complete) });
     // https://…, ~/Work/…, user@host: typed as is, whatever the mode
     if (isUrlLike(keys, this.layout)) return out;
+    // strict (terminals): echo 안녕 > out.txt — a token of symbols only stays as typed, whatever the mode
+    if (this.strict && isSymbolsOnly(keys)) return out;
     const strictEn = this.strict && w.typedMode === 'en';
     if (strictEn && keys.length <= this.params.strictShortKeys) return out;
     // TV, README, PR typed in English mode stay English. (In Korean mode the
@@ -617,7 +624,7 @@ export class Engine {
       const s = w.segs[i];
       const end = i + 1 < w.segs.length ? w.segs[i + 1].at : w.keys.length;
       const part = w.keys.slice(s.at, end);
-      out += s.mode === 'en' ? part : this.layout.render(part);
+      out += s.mode === 'en' ? part : this.layout.render(part, s.ascii);
     }
     return out;
   }
@@ -659,13 +666,14 @@ export class Engine {
 
   private lockAsShown(w: Word): void {
     const shown = w.interp;
+    const ascii = w.typedMode === 'en';
     w.segs =
       shown.lang === 'mix'
         ? [
             { at: 0, mode: 'en' },
-            { at: shown.at, mode: 'ko' },
+            { at: shown.at, mode: 'ko', ascii },
           ]
-        : [{ at: 0, mode: interpLang(shown) }];
+        : [{ at: 0, mode: interpLang(shown), ascii }];
     w.locked = true;
     w.held = false;
   }

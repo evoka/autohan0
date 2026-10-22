@@ -158,7 +158,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         m.addItem(info("눌러서 지우기 — 지우면 다시 자동으로 바꿔요"))
         for e in learned.sorted(by: { $0.keys < $1.keys }) {
-            let it = item("\(e.text)  (\(e.mode == "ko" ? "가" : "A") 상태에서 \(e.keys))", #selector(forgetLearned(_:)))
+            var title = "\(e.text)  (\(e.mode == "ko" ? "가" : "A") 상태에서 \(e.keys))"
+            if e.count == 1 { title += " (1회)" }  // reverted once: weakly biased, not yet learned
+            let it = item(title, #selector(forgetLearned(_:)))
+            if e.count == 1 { it.toolTip = "한 번 되돌림: 친 그대로 쪽으로 조금 기울여요. 한 번 더 되돌리면 배워요" }
             it.representedObject = [e.keys, e.mode]
             m.addItem(it)
         }

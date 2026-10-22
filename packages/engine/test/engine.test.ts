@@ -319,6 +319,28 @@ describe('엄격 모드 (터미널)', () => {
     e.setStrict(false);
     expect(e.type('nd ').text).toBe('시 ');
   });
+
+  it.each([
+    ['echo jfshea > out.txt', 'echo 안녕 > out.txt'],
+    ['echo jfshea | wc', 'echo 안녕 | wc'],
+    ['echo jfshea >> log', 'echo 안녕 >> log'],
+    ['echo jfshea && ls', 'echo 안녕 && ls'],
+    ['jfshea -', '안녕 -'],
+    ['jfshea ~', '안녕 ~'],
+  ])('한글로 바뀐 뒤 기호만 친 토큰은 QWERTY 그대로: %s → %s', (keys, text) => {
+    expect(strict('en').type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it('기호만 친 토큰은 가 모드에서도, 390에서도 그대로 (> 는 3이 아님)', () => {
+    expect(strict('ko').type('jfshea > out.txt ').text).toBe('안녕 > out.txt ');
+    const e = new Engine({ mode: 'en', layout: '39' });
+    e.setStrict(true);
+    expect(e.type('echo jfshea > out.txt ').text).toBe('echo 안녕 > out.txt ');
+  });
+
+  it('일반 모드는 한글 입력기처럼 자판표 글자 (> → .)', () => {
+    expect(new Engine({ mode: 'en' }).type('echo jfshea > out.txt ').text).toBe('echo 안녕 . out.txt ');
+  });
 });
 
 describe('학습 2단계', () => {
@@ -435,6 +457,19 @@ describe('숫자·따옴표 머리 + 한글 꼬리', () => {
   it('390에서는 기호가 QWERTY라 두 모드가 같다', () => {
     expect(new Engine({ mode: 'en', layout: '39' }).type('i9tyfk/~ ').text).toBe('뭐라고~ ');
     expect(new Engine({ mode: 'ko', layout: '39' }).type('i9tyfk/~ ').text).toBe('뭐라고~ ');
+  });
+
+  it('A 모드로 친 기호는 setMode로 잠겨도 그대로 (뭐라고~)', () => {
+    const e = new Engine({ mode: 'en' });
+    e.type('i9tyfk/~');
+    expect(e.setMode('en').text).toBe('뭐라고~');
+  });
+
+  it('A 모드로 친 기호는 setBypass로 잠겨도 그대로 (뭐라고~)', () => {
+    const e = new Engine({ mode: 'en' });
+    e.type('i9tyfk/~');
+    e.setBypass(true);
+    expect(e.type(' ').text).toBe('뭐라고~ ');
   });
 
   it.each(['https://github.com/evoka/autohan0', '~/Work/jfshea', './build.sh', '../src', '/usr/local/bin', 'user@host', 'www.naver.com', 'localhost:3000'])(
