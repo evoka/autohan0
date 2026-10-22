@@ -57,7 +57,7 @@ Xcode(또는 Command Line Tools, Swift 5.9 이상)와 Node가 필요합니다. �
 apps/macos/build.sh
 ```
 
-`apps/macos/build/autohan0.app`이 생깁니다. 스크립트는 ① 엔진과 단어 데이터를 JS 파일 하나로 묶고(`npm run build:jsc` → `apps/macos/Resources/autohan0-engine.js`, 약 1.1MB) ② `swift build -c release` ③ 앱 번들을 만들어 ④ 서명합니다(키체인의 Developer ID Application → `autohan0 local signing` → 없으면 ad hoc 순). 공증·배포는 하지 않습니다.
+`apps/macos/build/autohan0.app`이 생깁니다. 스크립트는 ① 엔진과 단어 데이터를 JS 파일 하나로 묶고(`npm run build:jsc` → `apps/macos/Resources/autohan0-engine.js`, 약 1.1MB) ② `swift build -c release` ③ 앱 번들을 만들어 ④ 서명합니다(`AUTOHAN0_SIGN_IDENTITY` → 키체인의 Developer ID Application → `apps/macos/.sign-identity`에 적은 인증서 이름 → `autohan0 local signing` → 없으면 ad hoc 순). 공증·배포는 하지 않습니다.
 
 ### 실행과 권한
 
@@ -68,6 +68,8 @@ open apps/macos/build/autohan0.app
 - 처음 띄우면 **손쉬운 사용** 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 autohan0을 켜면 몇 초 안에 메뉴바가 흐린 `가A`에서 `가` 또는 `A`로 바뀝니다(다시 띄울 필요 없음). 메뉴 맨 위 줄이 `자동 변환 중 · …`이면 동작 중입니다.
 - **다시 빌드하면 권한이 풀립니다.** ad hoc 서명은 빌드마다 서명이 달라져 macOS가 다른 앱으로 봅니다. 목록에서 스위치를 껐다 켜는 것으로는 안 되고, autohan0을 선택해 **"−"로 지운 뒤**(암호·Touch ID 확인) 메뉴의 **"손쉬운 사용 권한 켜기…"**를 눌러 다시 넣고 켜야 합니다. **자주 빌드한다면 자체 서명 인증서를 한 번 만들어 두세요.** 그러면 빌드 사이에 권한이 유지됩니다.
   **Apple Developer 계정이 있으면** Developer ID Application 인증서를 키체인에 넣어 두세요. `build.sh`가 그 인증서를 먼저 찾아 hardened runtime과 타임스탬프를 붙여 서명하고, 권한은 빌드 사이에 유지됩니다(공증은 배포할 때만 `xcrun notarytool`로 따로). Xcode › Settings › Accounts › 팀 선택 › Manage Certificates… › "+" › **Developer ID Application**을 누르면 인증서가 만들어져 로그인 키체인에 들어갑니다. `security find-identity -v -p codesigning`에 보이면 됩니다.
+
+  **Xcode에 Apple Development 인증서가 있으면** 그 이름을 `apps/macos/.sign-identity` 한 줄로 적어 두세요(저장소에는 올라가지 않음). 예: `Apple Development: 홍길동 (ABCDE12345)`. 같은 이름의 인증서가 여럿이면(다시 만든 인증서) `build.sh`가 Apple에서 **폐기된 것은 건너뜁니다**: `security find-identity`는 폐기된 인증서도 유효로 보여 주지만, 그것으로 서명한 앱을 열면 macOS가 "악성 코드가 차단되고 휴지통으로 이동함"을 띄우고 지웁니다. 남은 것이 모두 폐기됐으면 빌드를 멈춥니다. 키체인 접근에서 폐기된 인증서를 지워 두면 깔끔합니다.
 
   계정이 없으면 자체 서명 인증서를 씁니다. 가장 쉬운 방법은 스크립트 한 번 실행입니다(로그인 키체인에 자체 서명 인증서를 만들고 코드 서명용으로 신뢰 설정, 암호 확인 창이 뜰 수 있음):
 

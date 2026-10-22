@@ -9,3 +9,5 @@ apps/macos/.build/
 apps/macos/Resources/autohan0-engine.js
 apps/macos/Resources/autohan-engine.js
 .venv/
+# local signing identity for apps/macos/build.sh (one per Mac)
+apps/macos/.sign-identity
