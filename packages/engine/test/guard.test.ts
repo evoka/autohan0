@@ -23,12 +23,13 @@ function wordsOf(data: { words: string }): string[] {
 
 describe('어려운 문장', () => {
   const engine = new Engine();
-  const byStatus = (status: 'pass' | 'known') => HARD.filter((h) => h.status === status).map((h) => h.text);
+  const select = (status: 'pass' | 'known', mode: Lang) =>
+    HARD.filter((h) => h.status === status && (h.modes ?? ['en', 'ko']).includes(mode)).map((h) => h.text);
 
   it('pass 항목은 두 모드에서 모두 맞는다', () => {
     const bad: string[] = [];
     for (const mode of ['en', 'ko'] as Lang[]) {
-      const r = runSentences(engine, byStatus('pass'), mode);
+      const r = runSentences(engine, select('pass', mode), mode);
       bad.push(...r.bad.map((b) => `[${mode}] ${b}`));
     }
     expect(bad).toEqual([]);
@@ -36,7 +37,7 @@ describe('어려운 문장', () => {
 
   it('known 항목 현황 (단언 없음)', () => {
     for (const mode of ['en', 'ko'] as Lang[]) {
-      const r = runSentences(engine, byStatus('known'), mode);
+      const r = runSentences(engine, select('known', mode), mode);
       console.log(`known typed in ${mode}: ${r.wrong}/${r.words} wrong\n  ${r.bad.join('\n  ')}`);
     }
   });

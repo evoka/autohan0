@@ -38,9 +38,10 @@ export const KO_ORDER = 5;
 const LM_FLOOR = 0.1;
 const KIND_CLASS: Record<string, number> = { cho: 0, jung: 1, jong: 2, sym: 3 };
 
-// Particles / endings / nouns attached to English words in Korean text, and
-// counters after numbers (3시, 10개), with rough weights.
+// Particles / endings / nouns attached to English words in Korean text, counters
+// after numbers (3시, 10개) and label nouns after a letter (n제, x축, B급), with rough weights.
 const JOSA = `
+제 2 축 2 급 2 팀 2 반 1 형 1 호 1 호선 1 사 1 값 2 차 1 언어 1 세대 1 타입 1 라인 1 학점 1 등급 1 버튼 1 키 2 모드 1
 로 10 으로 6 에 10 에서 8 에게 3 한테 3 도 8 는 10 은 8 을 10 를 10 이 10 가 10 의 6 와 4 과 4
 랑 3 이랑 2 만 4 까지 3 부터 3 처럼 2 보다 2 이나 2 나 2 라고 2 이라고 2 에는 3 에도 2 로는 2
 으로는 1 로도 1 인데 3 이고 2 이야 2 야 2 이에요 2 예요 2 입니다 2 이다 2 인가 1 인지 2 들 3 들이 2

@@ -138,14 +138,18 @@ const other = (m: Lang): Lang => (m === 'ko' ? 'en' : 'ko');
 const isAlnum = (c: string) => /[A-Za-z0-9]/.test(c);
 /** The Korean tail of a mixed word may start after a letter, a digit or a closing quote / bracket ("contents"라고). */
 const isSplitBoundary = (c: string) => isAlnum(c) || '"\')]}'.includes(c);
-/** An English head worth splitting on: a word / acronym (2+ letters) or a number / code token (3개, v0.8.5로). */
-function headQualifies(head: string): boolean {
+/**
+ * An English head worth splitting on: a word / acronym (2+ letters), a number / code token
+ * (3개, v0.8.5로), or a single letter when the tail is a known particle / noun (n제, x축, A팀).
+ */
+function headQualifies(head: string, tailIsKnown: () => boolean): boolean {
   let letters = 0;
   for (const c of head) {
     if (/[0-9]/.test(c)) return true;
     if (/[A-Za-z]/.test(c)) letters++;
   }
-  return letters >= 2;
+  if (letters >= 2) return true;
+  return head.length === 1 && letters === 1 && tailIsKnown();
 }
 
 function codePoints(s: string): number {
@@ -454,16 +458,20 @@ export class Engine {
     out.push({ interp: EN, score: this.scorer.scoreEn(keys, complete) });
     // TV, README, PR typed in English mode stay English. (In Korean mode the
     // Shift row of Sebeolsik Final gives digits, e.g. KHK: = 2024.)
-    const allCaps = w.typedMode === 'en' && isAllCapsToken(keys);
-    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys), complete) });
+    const enTyped = w.typedMode === 'en';
+    const allCaps = enTyped && isAllCapsToken(keys);
+    // In English mode, Shift+letter read as a digit / symbol by the Hangul layout is unlikely.
+    const shiftCost = (part: string) => (enTyped ? this.scorer.shiftSymbolCost(part, this.layout) : 0);
+    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys), complete) + shiftCost(keys) });
     // English head + Korean particle/ending: AI로, deploy했는데, for문
     let best: Cand | null = null;
     const from = Math.max(1, keys.length - 15);
     for (let at = from; at < keys.length; at++) {
       if (!this.layout.isChoKey(keys[at]) || !isSplitBoundary(keys[at - 1])) continue;
       const head = keys.slice(0, at);
-      if (!headQualifies(head)) continue;
-      const s = this.scorer.scoreSplit(keys, at, this.layout, complete, this.params.switchLogProb);
+      const tail = keys.slice(at);
+      if (!headQualifies(head, () => this.scorer.tailIsKnown(this.layout.compose(tail), complete))) continue;
+      const s = this.scorer.scoreSplit(keys, at, this.layout, complete, this.params.switchLogProb, enTyped);
       if (s > NEG / 2 && (!best || s > best.score)) best = { interp: { lang: 'mix', at }, score: s };
     }
     if (best) out.push(best);

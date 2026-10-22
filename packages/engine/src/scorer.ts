@@ -3,7 +3,7 @@
 // All scores are natural-log probabilities of the same key sequence under each
 // language, so they can be compared directly.
 
-import { isChoOnly, isCompleteSyllable, type Unit } from './hangul';
+import { isChoOnly, isCompleteSyllable, jamoKind, type Unit } from './hangul';
 import type { Layout } from './layout';
 import type { LangModel, Models } from './models';
 
@@ -19,6 +19,20 @@ const RUN_SPLIT = LOG(0.2); // extra word-like run inside one token (build.sh)
 // Korean part after an English word: mostly particles / endings (AI로, deploy했는데),
 // sometimes a noun (for문).
 const SUFFIX_JOSA = 0.85;
+// Acronyms (UI, PR, API, README) are not lowercase words: a flat cost by length instead of the
+// frequency of "ui" / "pr".
+const ACRONYM_START = LOG(0.001);
+const ACRONYM_MORE = LOG(0.25);
+// In English mode, Shift + letter that the Hangul layout reads as a digit or symbol
+// (Sebeolsik Final: Shift+K = 2, Shift+N = -) was almost surely meant as a capital letter.
+const SHIFT_SYMBOL_EN = LOG(0.001);
+// A one-letter label before a Korean noun (n제, x축, A팀): flat cost instead of the word "n".
+const LABEL_HEAD = LOG(0.01);
+
+/** log P of a 2–6 letter all-caps acronym. */
+export function acronymLogProb(len: number): number {
+  return ACRONYM_START + (len - 2) * ACRONYM_MORE;
+}
 
 function punctCost(ch: string, lead: boolean): number {
   if (lead) {
@@ -91,7 +105,9 @@ export class Scorer {
         while (j < s.length && (isLetter(s[j]) || (s[j] === "'" && j + 1 < s.length && isLetter(s[j + 1])))) j++;
         const run = s.slice(i, j);
         const isLast = j >= s.length;
-        lp += wordLogProb(this.models.en, run.toLowerCase(), complete || !isLast) + caseCost(run);
+        let w = wordLogProb(this.models.en, run.toLowerCase(), complete || !isLast) + caseCost(run);
+        if (run.length <= 6 && isAllCapsToken(run)) w = Math.max(w, acronymLogProb(run.length));
+        lp += w;
         if (prevKind === 'digit') lp += LETTER_DIGIT_EN;
         else if (runs > 0) lp += RUN_SPLIT;
         runs++;
@@ -178,18 +194,46 @@ export class Scorer {
     return lp;
   }
 
-  /** English prefix keys[0:at] (complete) + Korean suffix keys[at:]. */
-  scoreSplit(keys: string, at: number, layout: Layout, complete: boolean, switchLogProb: number): number {
+  /** Cost of a Korean reading of keys typed in English mode: each Shift+letter read as a digit / symbol. */
+  shiftSymbolCost(keys: string, layout: Layout): number {
+    let n = 0;
+    for (const k of keys) if (isUpper(k) && jamoKind(layout.value(k)) === 'sym') n++;
+    return n * SHIFT_SYMBOL_EN;
+  }
+
+  /**
+   * True when the Korean tail after a one-letter head is a known particle / counter / label
+   * noun or a dictionary word (n제, x축, A팀) — a one-letter head is allowed only then.
+   */
+  tailIsKnown(units: Unit[], complete: boolean): boolean {
+    if (units.length === 0) return false;
+    let key = '';
+    for (const u of units) {
+      if (!isCompleteSyllable(u)) return false;
+      key += this.models.comb.canonical(u.cho) + this.models.comb.canonical(u.jung) + (u.jong ? this.models.comb.canonical(u.jong) : '');
+    }
+    const { josa, ko } = this.models;
+    return complete ? josa.has(key) || ko.lex.has(key) : josa.prefixMass(key) > 0 || ko.lex.prefixMass(key) > 0;
+  }
+
+  /**
+   * English prefix keys[0:at] (complete) + Korean suffix keys[at:]. `enTyped`: the word was
+   * typed in English mode, so Shift+letter read as a symbol / digit is charged (see shiftSymbolCost).
+   */
+  scoreSplit(keys: string, at: number, layout: Layout, complete: boolean, switchLogProb: number, enTyped = false): number {
     const head = keys.slice(0, at);
-    const en = this.scoreEn(head, true);
+    let en = this.scoreEn(head, true);
     if (en <= NEG / 2) return NEG;
+    // A single letter before a Korean noun is a label (n제, x축, B급), not the word "n".
+    if (head.length === 1 && isLetter(head)) en = Math.max(en, LABEL_HEAD);
     // The head must read better as English than as a Korean word by itself:
     // "hr" + 친구에게 is really 내친구에게, "lt" + 이 is 저이.
-    if (this.scoreKo(layout.compose(head), true) >= en) return NEG;
-    const tail = layout.compose(keys.slice(at));
-    const ko = this.scoreKo(tail, complete, true);
+    const shift = (part: string) => (enTyped ? this.shiftSymbolCost(part, layout) : 0);
+    if (this.scoreKo(layout.compose(head), true) + shift(head) >= en) return NEG;
+    const tailKeys = keys.slice(at);
+    const ko = this.scoreKo(layout.compose(tailKeys), complete, true);
     if (ko <= NEG / 2) return NEG;
-    return en + switchLogProb + ko;
+    return en + switchLogProb + ko + shift(tailKeys);
   }
 }
 

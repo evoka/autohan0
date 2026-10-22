@@ -268,6 +268,41 @@ describe('숫자·따옴표 머리 + 한글 꼬리', () => {
     expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
   });
 
+  it.each([
+    ['Nlc', 'N제'],
+    ['nlc', 'n제'],
+    ['xo9x', 'x축'],
+    ['Bkg3', 'B급'],
+    ["A'dz", 'A팀'],
+    ['Khgs', 'K는'],
+    ['UIkfWjgskts', 'UI같은건'],
+    ['APIygw', 'API를'],
+    ['PRjgw', 'PR을'],
+    ['CIkf', 'CI가'],
+  ])('한 글자·약어 머리 A: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it.each([
+    ['IY', 'IY'],
+    ['brb', 'brb'],
+    ['np', 'np'],
+  ])('A 모드 대문자·약어는 그대로: %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it('가 모드의 Shift 숫자는 그대로 (KHK:hes → 2024년, OK → 82)', () => {
+    expect(new Engine({ mode: 'ko' }).type('KHK:hes ').text).toBe('2024년 ');
+    expect(new Engine({ mode: 'ko' }).type('OK ').text).toBe('82 ');
+  });
+
+  it('한 글자 머리 뒤 한글은 음절 단위로 지워진다 (Nlc␣ ⌫⌫ → N)', () => {
+    const e = new Engine({ mode: 'en' });
+    expect(e.type('Nlc ').text).toBe('N제 ');
+    e.process({ type: 'backspace' });
+    expect(e.process({ type: 'backspace' }).text).toBe('N');
+  });
+
   it('숫자 머리 뒤 한글은 음절 단위로 지워진다 (3kr␣ ⌫⌫ → 3)', () => {
     // mid-word the shown "3kr" is kept (hysteresis); the space settles it to 3개
     const e = new Engine({ mode: 'en' });

@@ -10,9 +10,12 @@ export interface HardCase {
   text: string;
   tag: HardTag;
   status: 'pass' | 'known';
+  /** modes to type it in (default: both). Shift+letter typed in Korean mode is a digit (UI = 67), so some rows are English-mode only. */
+  modes?: Array<'en' | 'ko'>;
 }
 
 const c = (tag: HardTag, status: HardCase['status'], ...texts: string[]): HardCase[] => texts.map((text) => ({ text, tag, status }));
+const enOnly = (cases: HardCase[]): HardCase[] => cases.map((h) => ({ ...h, modes: ['en'] }));
 
 export const HARD: HardCase[] = [
   // digits followed by a counter / particle (3개, 10분, 2025년에, v0.8.5로)
@@ -44,23 +47,11 @@ export const HARD: HardCase[] = [
   ),
   ...c('number', 'known', '2024년 4분기 매출'),
   // one letter + Korean (n제, x축, B급)
-  ...c(
-    'letter',
-    'known',
-    'n제 풀었다',
-    'x축 방향',
-    'c언어 공부',
-    'B급 영화',
-    'A팀 회의',
-    'k8s에 올렸어',
-    'S라인 유지',
-    'Z세대 취향',
-    'N호선 타고 가',
-    'A형 혈액',
-  ),
+  ...c('letter', 'pass', 'n제 풀었다', 'x축 방향', 'c언어 공부', 'B급 영화', 'A팀 회의', 'S라인 유지', 'Z세대 취향', 'N호선 타고 가', 'A형 혈액'),
+  ...c('letter', 'known', 'k8s에 올렸어'),
   // acronym + particle
   ...c('acronym', 'pass', 'API를 호출했는데 에러가 나', 'PR을 올렸어', 'CI가 빨간색이야', 'TV를 켰다', 'DB에서 읽어', 'QA팀에 넘겼어', 'URL만 보내줘'),
-  ...c('acronym', 'known', 'UI같은건 싫어'),
+  ...enOnly(c('acronym', 'pass', 'UI같은건 싫어')),
   // closing quote / bracket before the Korean tail
   ...c('quote', 'pass', '이것을 "contents"라고 부른다', "'Hello World'는 첫 예제다", '이 버튼을 "Submit"이라고 읽는다'),
   ...c('quote', 'known', '(참고)로 적었다'),
