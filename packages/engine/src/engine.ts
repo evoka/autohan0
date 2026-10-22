@@ -496,7 +496,7 @@ export class Engine {
     const allCaps = enTyped && isAllCapsToken(keys);
     // In English mode, Shift+letter read as a digit / symbol by the Hangul layout is unlikely.
     const shiftCost = (part: string) => (enTyped ? this.scorer.shiftSymbolCost(part, this.layout) : 0);
-    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys, enTyped), complete) + shiftCost(keys) });
+    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys, enTyped), complete, false, enTyped) + shiftCost(keys) });
     // English head + Korean particle/ending: AI로, deploy했는데, for문
     let best: Cand | null = null;
     const from = Math.max(1, keys.length - 15);
@@ -518,10 +518,11 @@ export class Engine {
     let p = lang === w.typedMode ? 0 : -this.params.modePrior;
     // Reverted once before (not yet learned): lean towards leaving these keys as typed.
     if (lang === w.typedMode && (this.revertCounts.get(this.learnKey(w.typedMode, w.keys)) || 0) > 0) p += this.params.weakLearnBias;
-    // Language continuity with the previous word on the same line (a number is no context).
+    // Language continuity with the previous word on the same line. (A bare number counts as
+    // the language it was typed in: "1 hr" stays English.)
     const prev = this.previousWord(w);
     // ('mix' = English head + Korean tail continues either language.)
-    if (prev && !isNeutral(prev.keys) && c.interp.lang !== 'mix' && interpLang(c.interp) !== this.languageOf(prev)) p -= this.params.prevWordPrior;
+    if (prev && c.interp.lang !== 'mix' && interpLang(c.interp) !== this.languageOf(prev)) p -= this.params.prevWordPrior;
     return p;
   }
 

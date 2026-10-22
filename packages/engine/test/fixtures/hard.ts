@@ -4,7 +4,7 @@
 // must come out right typed in either mode; `'known'` rows are the current work list and are
 // only reported.
 
-export type HardTag = 'number' | 'letter' | 'acronym' | 'quote' | 'code' | 'url' | 'chat' | 'mixed' | 'limit';
+export type HardTag = 'number' | 'letter' | 'acronym' | 'quote' | 'code' | 'url' | 'chat' | 'syllable' | 'mixed' | 'limit';
 
 export interface HardCase {
   text: string;
@@ -16,6 +16,7 @@ export interface HardCase {
 
 const c = (tag: HardTag, status: HardCase['status'], ...texts: string[]): HardCase[] => texts.map((text) => ({ text, tag, status }));
 const enOnly = (cases: HardCase[]): HardCase[] => cases.map((h) => ({ ...h, modes: ['en'] }));
+const koOnly = (cases: HardCase[]): HardCase[] => cases.map((h) => ({ ...h, modes: ['ko'] }));
 
 export const HARD: HardCase[] = [
   // digits followed by a counter / particle (3개, 10분, 2025년에, v0.8.5로)
@@ -46,8 +47,16 @@ export const HARD: HardCase[] = [
     '3.5인치 디스켓이다',
     '2024년 4분기 매출',
   ),
+  // English with numbers must stay English (ordinals, units, a number before an ambiguous word)
+  ...c('number', 'pass', 'the 2nd one', '22nd', 'I ran 10 km in 1 hr', 'took 24 hrs', '5 lbs of flour', '3kg', '10kg', 'wait 10 hr'),
+  // one syllable whose vowel is a digit key (ㅛ = 4, ㅖ = 7, ㅢ = 8, ㅠ = 5): 요, 예, 의, 유, 휴
+  ...c('syllable', 'pass', '요', '예', '의', '유', '야', '휴', '교', '효', '카', '푹', '계', '희'),
+  // rare syllables typed on purpose in Korean mode stay Korean
+  ...koOnly(c('syllable', 'pass', '캬', '챠트', '퉤', '뷁뷁')),
   // one letter + Korean (n제, x축, B급)
-  ...c('letter', 'pass', 'n제 풀었다', 'x축 방향', 'c언어 공부', 'B급 영화', 'A팀 회의', 'S라인 유지', 'Z세대 취향', 'N호선 타고 가', 'A형 혈액', 'k8s에 올렸어'),
+  ...c('letter', 'pass', 'n제 풀었다', 'x축 방향', 'c언어 공부', 'B급 영화', 'A팀 회의', 'S라인 유지', 'Z세대 취향', 'N호선 타고 가', 'A형 혈액'),
+  // 긘 is charged as an unseen syllable only in English mode (in Korean mode 긘에 is what was typed)
+  ...enOnly(c('letter', 'pass', 'k8s에 올렸어')),
   // acronym + particle
   ...c('acronym', 'pass', 'API를 호출했는데 에러가 나', 'PR을 올렸어', 'CI가 빨간색이야', 'TV를 켰다', 'DB에서 읽어', 'QA팀에 넘겼어', 'URL만 보내줘'),
   ...enOnly(c('acronym', 'pass', 'UI같은건 싫어')),

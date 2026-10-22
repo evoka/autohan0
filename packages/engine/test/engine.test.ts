@@ -254,6 +254,43 @@ describe('줄 끝 판정', () => {
   });
 });
 
+describe('리뷰에서 찾은 회귀', () => {
+  it.each([
+    ['j4', '요'],
+    ['j7', '예'],
+    ['j8', '의'],
+    ['j5', '유'],
+    ['m5', '휴'],
+    ['k4', '교'],
+    ['0f', '카'],
+    ['p9x', '푹'],
+  ])('숫자 키 모음 한 음절도 A 모드에서 바뀐다: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+    expect(new Engine({ mode: 'en' }).type(keys + '\n').text).toBe(text + '\n');
+  });
+
+  it('서수는 모양이 맞을 때만 영어다 (12nd는 12시)', () => {
+    expect(new Engine({ mode: 'en' }).type('12nd 30;9sjc ').text).toBe('12시 30분에 ');
+    expect(new Engine({ mode: 'en' }).type('3nd ').text).toBe('3시 ');
+    expect(new Engine({ mode: 'en' }).type('11th ').text).toBe('11th ');
+  });
+
+  it.each(['the 2nd one', '22nd', 'I ran 10 km in 1 hr', 'took 24 hrs', '5 lbs of flour', '3kg', '10kg', '2nd'])(
+    '숫자 섞인 영어는 A 모드에서 그대로: %s',
+    (s) => {
+      expect(new Engine({ mode: 'en' }).type(s + ' ').text).toBe(s + ' ');
+    },
+  );
+
+  it.each([
+    ['06', '캬'],
+    ["o6'g", '챠트'],
+    ["'9c", '퉤'],
+  ])('가 모드로 친 드문 음절은 그대로: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'ko' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+});
+
 describe('엄격 모드 (터미널)', () => {
   const strict = (mode: 'en' | 'ko') => {
     const e = new Engine({ mode });

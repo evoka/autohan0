@@ -38,12 +38,23 @@ const HOST_LIMITS = { maxLiveWords: 24, maxCommitted: 400 };
 export class HostAdapter {
   readonly engine: Engine;
   shiftSpaceToggle: boolean;
-  private learnedCount: number;
+  private learnedSig: string;
 
   constructor(opts: HostOptions = {}) {
     this.engine = new Engine({ ...HOST_LIMITS, ...opts });
     this.shiftSpaceToggle = opts.shiftSpaceToggle ?? false;
-    this.learnedCount = this.engine.learnedWords().length;
+    this.learnedSig = this.learnedSignature();
+  }
+
+  /** Changes when a word is added, removed, or reverted once more (count 1 → 2 is the moment it is learned). */
+  private learnedSignature(): string {
+    let n = 0;
+    let counts = 0;
+    for (const e of this.engine.learnedWords()) {
+      n++;
+      counts += e.count;
+    }
+    return `${n}:${counts}`;
   }
 
   get mode(): Lang {
@@ -115,9 +126,9 @@ export class HostAdapter {
   }
 
   private action(consume: boolean, deleteCount: number, insert: string, thenOriginal: boolean): HostAction {
-    const n = this.engine.learnedWords().length;
-    const learnedChanged = n !== this.learnedCount;
-    this.learnedCount = n;
+    const sig = this.learnedSignature();
+    const learnedChanged = sig !== this.learnedSig;
+    this.learnedSig = sig;
     return { consume, deleteCount, insert, thenOriginal, mode: this.engine.getMode(), learnedChanged };
   }
 }

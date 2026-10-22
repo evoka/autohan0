@@ -11,7 +11,7 @@ import { runSentences, typeAlone } from '../eval/harness';
 import { HARD, IDENTIFIERS } from './fixtures/hard';
 
 /** en.json words that come out Korean when typed alone in English mode (hr → 내, kg → 그 …). */
-const EN_CHANGE_CEILING = 77;
+const EN_CHANGE_CEILING = 76;
 /** ko.json eojeols that come out English when typed alone in Korean mode. */
 const KO_CHANGE_CEILING = 1;
 

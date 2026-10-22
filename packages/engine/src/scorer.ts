@@ -32,8 +32,33 @@ const LABEL_HEAD = LOG(0.01);
 // probability of "k" or "s".
 const CODE_LETTER = LOG(0.15);
 // A syllable that never occurs in the Korean word lists (긘, 뗘): the jamo n-gram alone is
-// too kind to it.
+// too kind to it. Charged only for words typed in English mode: in Korean mode the typist
+// meant those keys (캬, 챠트).
 const UNSEEN_SYLLABLE = LOG(0.01);
+// Ordinal / unit suffixes right after a number (2nd, 3kg, 24hrs): English, not 2시 / 3그.
+const UNIT_AFTER_DIGIT = LOG(0.3);
+const UNIT_SUFFIXES = new Set(
+  'kg km kb mb gb tb hr hrs lb lbs yr yrs ms min mins sec secs cm mm mi ft oz px pt fps mph am pm ml mg kw ghz mhz'.split(' '),
+);
+
+/** 1st 2nd 3rd 4th 11th 12th 22nd … (12nd is not an ordinal: 12시). */
+function isOrdinal(digits: string, suffix: string): boolean {
+  const n = Number(digits);
+  const last = n % 10;
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  switch (suffix) {
+    case 'st':
+      return last === 1 && !teen;
+    case 'nd':
+      return last === 2 && !teen;
+    case 'rd':
+      return last === 3 && !teen;
+    case 'th':
+      return teen || last === 0 || last > 3;
+    default:
+      return false;
+  }
+}
 
 /** log P of a 2–6 letter all-caps acronym. */
 export function acronymLogProb(len: number): number {
@@ -114,6 +139,9 @@ export class Scorer {
     let seenAlnum = false;
     let runs = 0;
     let prevKind = '';
+    let alnum = 0;
+    for (const c of s) if (isLetter(c) || isDigit(c)) alnum++;
+    let lastDigits = '';
     while (i < s.length) {
       const c = s[i];
       if (isLetter(c)) {
@@ -127,9 +155,12 @@ export class Scorer {
         // A single letter glued to a digit is a code token (k8s, h264, 3e-4, F1), not the word
         // "k". Longer runs are left to the word model: in Sebeolsik the digit keys are vowels
         // (ㅜ = 9, ㅛ = 4), so "o9x" is 축 and "3kr" is 3개.
-        // ("5y/" is not: a letter after a digit counts only at the end or before another digit.)
+        // ("5y/" is not: a letter after a digit counts only at the end or before another digit.
+        // Nor is a lowercase letter + one digit: j4 is 요, m5 is 휴 — ㅛ ㅠ ㅑ ㅖ ㅢ are digit keys.)
         const nextDigit = j < s.length && isDigit(s[j]);
-        if (run.length === 1 && (nextDigit || (prevKind === 'digit' && j >= s.length))) w = Math.max(w, CODE_LETTER);
+        if (run.length === 1 && (nextDigit || (prevKind === 'digit' && j >= s.length)) && (isUpper(run) || alnum >= 3)) w = Math.max(w, CODE_LETTER);
+        // 2nd, 3kg, 24hrs: an ordinal / unit after a number is English, not 2시 / 3그
+        if (prevKind === 'digit' && (UNIT_SUFFIXES.has(run.toLowerCase()) || isOrdinal(lastDigits, run.toLowerCase()))) w = Math.max(w, UNIT_AFTER_DIGIT);
         lp += w;
         if (prevKind === 'digit') lp += LETTER_DIGIT_EN;
         else if (runs > 0) lp += RUN_SPLIT;
@@ -142,6 +173,7 @@ export class Scorer {
         while (j < s.length && isDigit(s[j])) j++;
         lp += DIGIT_START + (j - i - 1) * DIGIT_NEXT;
         if (prevKind === 'letter') lp += LETTER_DIGIT_EN;
+        lastDigits = s.slice(i, j);
         prevKind = 'digit';
         seenAlnum = true;
         i = j;
@@ -160,9 +192,10 @@ export class Scorer {
    * Korean (Sebeolsik) reading. Returns NEG when the jamo do not form syllables
    * (orphan vowel / final consonant, initial consonant without vowel), except a
    * trailing initial consonant while the word is still being typed.
-   * `asSuffix` scores the first Hangul run as a particle/ending after English.
+   * `asSuffix` scores the first Hangul run as a particle/ending after English. `enTyped`: the
+   * word was typed in English mode, so syllables unseen in the word lists are charged.
    */
-  scoreKo(units: Unit[], complete: boolean, asSuffix = false): number {
+  scoreKo(units: Unit[], complete: boolean, asSuffix = false, enTyped = false): number {
     const ko = this.models.ko;
     const comb = this.models.comb;
     if (units.length === 0) return 0;
@@ -185,7 +218,7 @@ export class Scorer {
           if (!isCompleteSyllable(v) && !(last && !complete && isChoOnly(v))) return NEG;
           key += comb.canonical(v.cho) + (v.jung ? comb.canonical(v.jung) : '') + (v.jong ? comb.canonical(v.jong) : '');
           // the last syllable may still grow (갈 → 갉) while typing
-          if (isCompleteSyllable(v) && (complete || !last) && !this.models.seenSyllables.has(renderUnit(v))) unseen++;
+          if (enTyped && isCompleteSyllable(v) && (complete || !last) && !this.models.seenSyllables.has(renderUnit(v))) unseen++;
           j++;
         }
         const isLast = j >= units.length;
@@ -255,9 +288,9 @@ export class Scorer {
     // The head must read better as English than as a Korean word by itself:
     // "hr" + 친구에게 is really 내친구에게, "lt" + 이 is 저이.
     const shift = (part: string) => (enTyped ? this.shiftSymbolCost(part, layout) : 0);
-    if (this.scoreKo(layout.compose(head, enTyped), true) + shift(head) >= en) return NEG;
+    if (this.scoreKo(layout.compose(head, enTyped), true, false, enTyped) + shift(head) >= en) return NEG;
     const tailKeys = keys.slice(at);
-    const ko = this.scoreKo(layout.compose(tailKeys, enTyped), complete, true);
+    const ko = this.scoreKo(layout.compose(tailKeys, enTyped), complete, true, enTyped);
     if (ko <= NEG / 2) return NEG;
     return en + switchLogProb + ko + shift(tailKeys);
   }

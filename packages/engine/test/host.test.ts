@@ -139,21 +139,21 @@ describe('HostAdapter', () => {
     expect(host.mode).toBe('en');
   });
 
-  it('치는 중 한/영 한 번 → 되돌림, 세 번이면 learnedChanged', () => {
+  it('치는 중 한/영 한 번 → 되돌림; 첫 되돌림(1회 항목)과 두 번째(배움) 모두 learnedChanged', () => {
     const host = new HostAdapter({ mode: 'en' });
-    let changed = false;
-    for (let i = 0; i < 3; i++) {
+    const changed: boolean[] = [];
+    for (let i = 0; i < 2; i++) {
       const f = new Field();
       const t = typeKeys(host, f, 'jfshea', i * 10000);
       const a = host.toggle(t + 100);
       f.apply(a, null);
       expect(f.text).toBe('jfshea');
-      changed = changed || a.learnedChanged;
+      changed.push(a.learnedChanged);
       host.caretMoved();
       host.engine.setMode('en');
     }
-    expect(changed).toBe(true);
-    expect(host.engine.learnedWords().map((e) => e.keys)).toEqual(['jfshea']);
+    expect(changed).toEqual([true, true]);
+    expect(host.engine.learnedWords()).toEqual([{ keys: 'jfshea', mode: 'en', text: 'jfshea', count: 2 }]);
   });
 
   it('Shift+Space 한/영 (켰을 때만)', () => {
