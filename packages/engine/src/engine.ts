@@ -79,6 +79,8 @@ export interface EngineParams {
   doubleToggleMs: number;
   /** reverts of the same keys before they are learned */
   learnThreshold: number;
+  /** log-odds bonus for the as-typed reading of keys reverted once (fewer than learnThreshold times) */
+  weakLearnBias: number;
 }
 
 export interface EngineLimits {
@@ -98,7 +100,8 @@ export const DEFAULT_PARAMS: EngineParams = {
   prevWordPrior: 2,
   switchLogProb: Math.log(0.02),
   doubleToggleMs: 400,
-  learnThreshold: 3,
+  learnThreshold: 2,
+  weakLearnBias: 3,
 };
 
 export interface EngineOptions extends EngineLimits {
@@ -186,7 +189,10 @@ export class Engine {
     this.layout = getLayout(opts.layout ?? '3f');
     this.scorer = new Scorer(buildModels(opts.data));
     this.mode = opts.mode ?? 'en';
-    for (const e of opts.learned ?? []) this.addLearned(e.keys, e.mode, e.count);
+    for (const e of opts.learned ?? []) {
+      if (e.count >= this.params.learnThreshold) this.addLearned(e.keys, e.mode, e.count);
+      else if (e.count > 0) this.revertCounts.set(this.learnKey(e.mode, e.keys), e.count);
+    }
   }
 
   // ---- public API -------------------------------------------------------
@@ -266,16 +272,22 @@ export class Engine {
     if (on && cur && !cur.locked) this.lockAsShown(cur);
   }
 
+  /** Learned words (count >= learnThreshold) and words reverted fewer times (weakly biased). */
   learnedWords(): LearnedEntry[] {
-    return [...this.learned.values()];
+    const out = [...this.learned.values()];
+    for (const [key, count] of this.revertCounts) {
+      if (this.learned.has(key)) continue;
+      const [mode, keys] = key.split('\u0000') as [Lang, string];
+      out.push({ keys, mode, text: mode === 'en' ? keys : this.layout.render(keys), count });
+    }
+    return out;
   }
 
   forgetLearned(keys: string, mode?: Lang): void {
-    for (const [k, e] of this.learned) {
-      if (e.keys === keys && (!mode || e.mode === mode)) {
-        this.learned.delete(k);
-        this.revertCounts.delete(k);
-      }
+    for (const m of mode ? [mode] : (['en', 'ko'] as Lang[])) {
+      const k = this.learnKey(m, keys);
+      this.learned.delete(k);
+      this.revertCounts.delete(k);
     }
     this.rebuildLearnedPrefixes();
   }
@@ -485,6 +497,8 @@ export class Engine {
   private prior(c: Cand, w: Word): number {
     const lang = c.interp.lang === 'mix' ? 'mix' : c.interp.lang;
     let p = lang === w.typedMode ? 0 : -this.params.modePrior;
+    // Reverted once before (not yet learned): lean towards leaving these keys as typed.
+    if (lang === w.typedMode && (this.revertCounts.get(this.learnKey(w.typedMode, w.keys)) || 0) > 0) p += this.params.weakLearnBias;
     // Language continuity with the previous word on the same line (a number is no context).
     const prev = this.previousWord(w);
     // ('mix' = English head + Korean tail continues either language.)

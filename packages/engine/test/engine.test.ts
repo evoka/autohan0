@@ -254,6 +254,49 @@ describe('줄 끝 판정', () => {
   });
 });
 
+describe('학습 2단계', () => {
+  /** nd␣ → 시␣, then the double Han/Yeong press restores "nd" (one revert). */
+  function revertOnce(e: Engine, t: number): void {
+    expect(e.type('nd ').text).toBe('시 ');
+    e.process({ type: 'toggle' }, t);
+    expect(e.process({ type: 'toggle' }, t + 100).text).toBe('nd ');
+    e.process({ type: 'reset' });
+  }
+
+  it('한 번 되돌리면 1회 항목이 남고, 그 키열은 친 그대로 쪽으로 기운다', () => {
+    const e = new Engine({ mode: 'en' });
+    revertOnce(e, 1000);
+    expect(e.learnedWords()).toEqual([{ keys: 'nd', mode: 'en', text: 'nd', count: 1 }]);
+    expect(new Engine({ mode: 'en' }).type('nd ').text).toBe('시 ');
+    expect(new Engine({ mode: 'en', learned: e.learnedWords() }).type('nd ').text).toBe('nd ');
+  });
+
+  it('두 번 되돌리면 배운다 (더는 바꾸지 않음)', () => {
+    // a bias too small to keep nd on its own, so the word is converted and reverted twice
+    const e = new Engine({ mode: 'en', params: { weakLearnBias: 0.1 } });
+    revertOnce(e, 1000);
+    expect(e.learnedWords()[0].count).toBe(1);
+    revertOnce(e, 5000);
+    expect(e.learnedWords()).toEqual([{ keys: 'nd', mode: 'en', text: 'nd', count: 2 }]);
+    expect(e.type('nd ').text).toBe('nd ');
+    expect(new Engine({ mode: 'en', learned: e.learnedWords() }).type('nd ').text).toBe('nd ');
+  });
+
+  it('옛 learned.json(count 3)도 배운 말로 복원된다', () => {
+    const e = new Engine({ mode: 'en', learned: [{ keys: 'jfshea', mode: 'en', text: 'jfshea', count: 3 }] });
+    expect(e.type('jfshea ').text).toBe('jfshea ');
+    expect(e.learnedWords()[0].count).toBe(3);
+  });
+
+  it('지우면 1회 항목도 사라진다', () => {
+    const e = new Engine({ mode: 'en' });
+    revertOnce(e, 1000);
+    e.forgetLearned('nd', 'en');
+    expect(e.learnedWords()).toEqual([]);
+    expect(e.type('nd ').text).toBe('시 ');
+  });
+});
+
 describe('숫자·따옴표 머리 + 한글 꼬리', () => {
   it.each([
     ['3kr', '3개'],

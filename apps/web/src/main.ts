@@ -293,7 +293,7 @@ function renderLearned(): void {
       const label = document.createElement('span');
       const code = document.createElement('code');
       code.textContent = e.text;
-      label.append(code, ` ${e.mode === 'en' ? '영어 상태' : '한글 상태'}에서 그대로 둠`);
+      label.append(code, ` ${e.mode === 'en' ? '영어 상태' : '한글 상태'}에서 ${e.count >= 2 ? '그대로 둠' : '한 번 되돌림 (조금 기울임)'}`);
       const del = document.createElement('button');
       del.type = 'button';
       del.textContent = '삭제';

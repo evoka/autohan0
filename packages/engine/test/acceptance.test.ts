@@ -150,10 +150,10 @@ describe('필수', () => {
     expect(r2.mode).toBe('ko');
   });
 
-  it('21. 같은 말을 세 번 되돌리면 학습, 4번째는 바꾸지 않음', () => {
+  it('21. 같은 말을 두 번 되돌리면 학습, 3번째는 바꾸지 않음 (SPEC의 세 번에서 바꿈)', () => {
     const engine = new Engine({ mode: A });
     let t = 0;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       engine.process({ type: 'reset' }, (t += 1000));
       engine.setMode('en');
       for (const ch of 'jfshea') engine.process({ type: 'key', ch }, (t += 50));

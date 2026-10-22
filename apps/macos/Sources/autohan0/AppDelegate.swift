@@ -147,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         m.autoenablesItems = false
         let learned = controller.learned
         if learned.isEmpty {
-            m.addItem(info("아직 없어요. 같은 말을 한/영 키로 세 번 되돌리면 배워요"))
+            m.addItem(info("아직 없어요. 같은 말을 한/영 키로 두 번 되돌리면 배워요"))
             return m
         }
         m.addItem(info("눌러서 지우기 — 지우면 다시 자동으로 바꿔요"))
