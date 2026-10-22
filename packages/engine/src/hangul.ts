@@ -117,7 +117,11 @@ export class Combiner {
  * Compose a jamo/symbol sequence into units, libhangul jaso-keyboard style.
  * `starts`, when given, receives the index of the jamo that opened each unit.
  */
-export function composeJamo(jamos: ReadonlyArray<string>, comb: Combiner, starts?: number[]): Unit[] {
+/**
+ * `fallbacks[i]`, when set, is a symbol to emit instead of jamos[i] if that jamo cannot join a
+ * syllable (Shift+1 typed in English mode is ㄲ받침 in 닦 but "!" after 안녕).
+ */
+export function composeJamo(jamos: ReadonlyArray<string>, comb: Combiner, starts?: number[], fallbacks?: ReadonlyArray<string>): Unit[] {
   const units: Unit[] = [];
   const push = (u: Unit, at: number) => {
     units.push(u);
@@ -128,6 +132,17 @@ export function composeJamo(jamos: ReadonlyArray<string>, comb: Combiner, starts
     const kind = jamoKind(j);
     const cur = units.length ? units[units.length - 1] : undefined;
     const open = cur && !cur.sym ? cur : undefined;
+    const fallback = fallbacks?.[i];
+    if (fallback && kind !== 'cho' && kind !== 'sym') {
+      const joins =
+        kind === 'jung'
+          ? !!open && ((!!open.jung && !open.jong && !!comb.combine(open.jung, j)) || (!!open.cho && !open.jung))
+          : !!open && ((!!open.jong && !!comb.combine(open.jong, j)) || (!!open.cho && !!open.jung && !open.jong));
+      if (!joins) {
+        push({ cho: '', jung: '', jong: '', sym: fallback }, i);
+        continue;
+      }
+    }
     if (kind === 'cho') {
       if (open && open.cho && !open.jung && !open.jong) {
         const c = comb.combine(open.cho, j);

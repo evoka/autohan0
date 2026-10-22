@@ -35,26 +35,46 @@ export class Layout {
     return jamoKind(this.value(key)) === 'cho';
   }
 
-  compose(keys: string): Unit[] {
+  /**
+   * Compose keys into syllables / symbols. `keepAscii` (a word typed in English mode): a key
+   * whose Hangul value is a symbol keeps its QWERTY character (Final: `~` stays `~`, not ※), and
+   * Shift + punctuation that is a jamo (`!` = ㄲ받침) is that jamo only where it joins a syllable.
+   */
+  compose(keys: string, keepAscii = false, starts?: number[]): Unit[] {
     const jamos: string[] = [];
-    for (const k of keys) jamos.push(this.value(k));
-    return composeJamo(jamos, this.comb);
+    let fallbacks: string[] | undefined;
+    for (const k of keys) {
+      const v = this.value(k);
+      if (keepAscii && jamoKind(v) === 'sym') {
+        jamos.push(k);
+      } else {
+        jamos.push(v);
+        if (keepAscii && SHIFTED_PUNCT.has(k)) {
+          fallbacks ??= new Array(keys.length).fill('');
+          fallbacks[jamos.length - 1] = k;
+        }
+      }
+    }
+    return composeJamo(jamos, this.comb, starts, fallbacks);
   }
 
   /** Number of trailing keys that make up the last rendered character (syllable, jamo or symbol). */
-  lastUnitKeys(keys: string): number {
+  lastUnitKeys(keys: string, keepAscii = false): number {
     if (!keys) return 0;
     const starts: number[] = [];
-    composeJamo(Array.from(keys, (k) => this.value(k)), this.comb, starts);
+    this.compose(keys, keepAscii, starts);
     return keys.length - starts[starts.length - 1];
   }
 
-  render(keys: string): string {
+  render(keys: string, keepAscii = false): string {
     let out = '';
-    for (const u of this.compose(keys)) out += renderUnit(u);
+    for (const u of this.compose(keys, keepAscii)) out += renderUnit(u);
     return out;
   }
 }
+
+/** Punctuation typed with Shift on a QWERTY keyboard. */
+const SHIFTED_PUNCT = new Set('!@#$%^&*()_+{}|:"<>?~');
 
 const combiners = new Map<string, Combiner>();
 const cache = new Map<string, Layout>();

@@ -244,9 +244,9 @@ export class Scorer {
     // The head must read better as English than as a Korean word by itself:
     // "hr" + 친구에게 is really 내친구에게, "lt" + 이 is 저이.
     const shift = (part: string) => (enTyped ? this.shiftSymbolCost(part, layout) : 0);
-    if (this.scoreKo(layout.compose(head), true) + shift(head) >= en) return NEG;
+    if (this.scoreKo(layout.compose(head, enTyped), true) + shift(head) >= en) return NEG;
     const tailKeys = keys.slice(at);
-    const ko = this.scoreKo(layout.compose(tailKeys), complete, true);
+    const ko = this.scoreKo(layout.compose(tailKeys, enTyped), complete, true);
     if (ko <= NEG / 2) return NEG;
     return en + switchLogProb + ko + shift(tailKeys);
   }

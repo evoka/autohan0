@@ -308,6 +308,25 @@ describe('숫자·따옴표 머리 + 한글 꼬리', () => {
     expect(new Engine({ mode: 'en' }).type('2024hes 4;9skd\n').text).toBe('2024년 4분기\n');
   });
 
+  it.each([
+    ['i9tyfk/~', '뭐라고~'],
+    ['jfshea!', '안녕!'],
+    ['[jfshea]', '[안녕]'],
+    ['(ofzk/)y/', '(참고)로'],
+  ])('A 모드로 친 기호는 QWERTY 글자 그대로: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it('가 모드로 친 기호는 자판표 글자 (최종: ~ → ※, [ → ( )', () => {
+    expect(new Engine({ mode: 'ko' }).type('i9tyfk/~ ').text).toBe('뭐라고※ ');
+    expect(new Engine({ mode: 'ko' }).type('[jfshea] ').text).toBe('(안녕< ');
+  });
+
+  it('390에서는 기호가 QWERTY라 두 모드가 같다', () => {
+    expect(new Engine({ mode: 'en', layout: '39' }).type('i9tyfk/~ ').text).toBe('뭐라고~ ');
+    expect(new Engine({ mode: 'ko', layout: '39' }).type('i9tyfk/~ ').text).toBe('뭐라고~ ');
+  });
+
   it('가 모드의 Shift 숫자는 그대로 (KHK:hes → 2024년, OK → 82)', () => {
     expect(new Engine({ mode: 'ko' }).type('KHK:hes ').text).toBe('2024년 ');
     expect(new Engine({ mode: 'ko' }).type('OK ').text).toBe('82 ');

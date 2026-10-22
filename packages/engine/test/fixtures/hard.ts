@@ -53,7 +53,8 @@ export const HARD: HardCase[] = [
   ...enOnly(c('acronym', 'pass', 'UI같은건 싫어')),
   // closing quote / bracket before the Korean tail
   ...c('quote', 'pass', '이것을 "contents"라고 부른다', "'Hello World'는 첫 예제다", '이 버튼을 "Submit"이라고 읽는다'),
-  ...c('quote', 'known', '(참고)로 적었다'),
+  // in Korean mode Sebeolsik Final types ( ) as ' ~ — faithful, so English mode only
+  ...enOnly(c('quote', 'pass', '(참고)로 적었다')),
   // code tokens
   ...c('code', 'pass', 'h264 코덱 써', 'mp3 파일 보내', '0xff 값 넣어', 'build.sh 돌려', 'npm test도 돌려줘', 'v2.0.0으로 올렸어'),
   // URLs and paths stay as typed
@@ -68,12 +69,13 @@ export const HARD: HardCase[] = [
     'localhost:3000 띄워',
     '/usr/local/bin 아래',
   ),
-  // chat; `~` typed in English mode on Sebeolsik Final is ※ in the Hangul reading
+  // chat; a word typed in English mode keeps its ASCII `~` (Sebeolsik Final would give ※)
   ...c('chat', 'pass', '밥 먹었어?', '진짜 대박!', '퇴근하고 집에 가는 중이야'),
-  ...c('chat', 'known', '뭐라고~ 안 들려', '오늘 날씨 좋다~'),
-  // Known limits (README): Korean head + English tail is not split; Shift digits in Korean mode.
+  ...enOnly(c('chat', 'pass', '뭐라고~ 안 들려')),
+  // Known limits (README): Korean head + English tail is not split; Shift digits in Korean mode;
+  // after the first word switches to Korean, `~` is what the Final layout types (※).
   ...c('mixed', 'known', '코드review 해줘', '챗GPT 써봐'),
-  ...c('limit', 'known', 'OK 알겠습니다'),
+  ...c('limit', 'known', 'OK 알겠습니다', '오늘 날씨 좋다~'),
 ];
 
 /** Code and command tokens that must come out exactly as typed in English mode. */

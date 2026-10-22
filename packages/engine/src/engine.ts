@@ -369,7 +369,7 @@ export class Engine {
     } else {
       koFrom = w.interp.lang === 'ko' ? 0 : w.interp.lang === 'mix' ? w.interp.at : k.length;
     }
-    return koFrom < k.length ? this.layout.lastUnitKeys(k.slice(koFrom)) : 1;
+    return koFrom < k.length ? this.layout.lastUnitKeys(k.slice(koFrom), !w.locked && w.typedMode === 'en') : 1;
   }
 
   private onToggle(now: number): void {
@@ -464,7 +464,7 @@ export class Engine {
     const allCaps = enTyped && isAllCapsToken(keys);
     // In English mode, Shift+letter read as a digit / symbol by the Hangul layout is unlikely.
     const shiftCost = (part: string) => (enTyped ? this.scorer.shiftSymbolCost(part, this.layout) : 0);
-    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys), complete) + shiftCost(keys) });
+    out.push({ interp: KO, score: allCaps ? NEG : this.scorer.scoreKo(this.layout.compose(keys, enTyped), complete) + shiftCost(keys) });
     // English head + Korean particle/ending: AI로, deploy했는데, for문
     let best: Cand | null = null;
     const from = Math.max(1, keys.length - 15);
@@ -472,7 +472,7 @@ export class Engine {
       if (!this.layout.isChoKey(keys[at]) || !isSplitBoundary(keys[at - 1])) continue;
       const head = keys.slice(0, at);
       const tail = keys.slice(at);
-      if (!headQualifies(head, () => this.scorer.tailIsKnown(this.layout.compose(tail), complete))) continue;
+      if (!headQualifies(head, () => this.scorer.tailIsKnown(this.layout.compose(tail, enTyped), complete))) continue;
       const s = this.scorer.scoreSplit(keys, at, this.layout, complete, this.params.switchLogProb, enTyped);
       if (s > NEG / 2 && (!best || s > best.score)) best = { interp: { lang: 'mix', at }, score: s };
     }
@@ -589,13 +589,15 @@ export class Engine {
   private renderWord(w: Word): string {
     if (w.locked) return this.renderAsTyped(w);
     const k = w.keys;
+    // a word typed in English mode keeps its ASCII symbols (see Layout.compose)
+    const ascii = w.typedMode === 'en';
     switch (w.interp.lang) {
       case 'en':
         return k;
       case 'ko':
-        return this.layout.render(k);
+        return this.layout.render(k, ascii);
       default:
-        return k.slice(0, w.interp.at) + this.layout.render(k.slice(w.interp.at));
+        return k.slice(0, w.interp.at) + this.layout.render(k.slice(w.interp.at), ascii);
     }
   }
 
