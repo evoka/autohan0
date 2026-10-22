@@ -139,6 +139,32 @@ enum SelfTest {
 
     static func now() -> UInt64 { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) }
 
+    /// The focus notifications Chrome sent while 김민석 was typed into Google Calendar's guest
+    /// combo box (recorded 2026-10-22): window notices with the same field focused, then the
+    /// suggestion list item, then the field again. None of them moved the caret; only another
+    /// text field does.
+    static func focusFilterCheck() -> Bool {
+        var f = FocusFilter<String>(same: ==)
+        f.attached(to: "guests", editable: true)
+        let steps: [(String?, Bool, Bool)] = [
+            ("guests", true, false), // AXWindow notice, the combo box is still focused
+            ("suggestion", false, false), // AXStaticText in the suggestion AXList
+            ("guests", true, false), // back to the combo box
+            (nil, false, false), // nothing focused
+            ("title", true, true), // another text field: the text before the caret is unknown
+            ("title", true, false),
+        ]
+        var ok = true
+        for (i, s) in steps.enumerated() {
+            let got = f.focusChanged(to: s.0, editable: s.1)
+            if got != s.2 {
+                print("  포커스 \(i): \(s.0 ?? "nil") → commit \(got), 기대 \(s.2)")
+                ok = false
+            }
+        }
+        return ok
+    }
+
     static func run() -> Bool {
         guard let url = EngineBridge.defaultScriptURL() else {
             print("엔진 스크립트(autohan0-engine.js)를 찾지 못했습니다")
@@ -178,6 +204,9 @@ enum SelfTest {
             print("  #\(c.id.padding(toLength: 4, withPad: " ", startingAt: 0)) \(tag)  \(r.got)")
         }
         print("수용 테스트: \(cases.count - failedRequired - failedOptional)/\(cases.count) 통과 (필수 실패 \(failedRequired), 권장 실패 \(failedOptional))")
+        let focusOK = focusFilterCheck()
+        print("포커스 알림 걸러내기: \(focusOK ? "통과" : "실패")")
+        if !focusOK { failedRequired += 1 }
 
         let warm = bridge.warmup()
         print(String(format: "워밍업 %.0f ms", warm))

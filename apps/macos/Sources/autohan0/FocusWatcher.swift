@@ -2,6 +2,35 @@ import AppKit
 import ApplicationServices
 import Carbon
 
+/// Decides which focus notifications mean "the caret is somewhere else now".
+///
+/// Chrome reports focus on a suggestion list item while the user keeps typing in the combo box
+/// (Google Calendar's guests field, address bars, search boxes), and window notices with the same
+/// field still focused. Neither moves the caret: keys still go to the field. Only another text
+/// field getting focus does (keys, clicks and app switches are caught elsewhere).
+struct FocusFilter<Element> {
+    let same: (Element, Element) -> Bool
+    /// the text field keys were going to
+    private(set) var field: Element?
+
+    init(same: @escaping (Element, Element) -> Bool) {
+        self.same = same
+    }
+
+    /// Start of observation (app activated): remember the focused field without committing.
+    mutating func attached(to element: Element?, editable: Bool) {
+        field = editable ? element : nil
+    }
+
+    /// A focus notification arrived; `element` is what is focused now. True: commit and forget.
+    mutating func focusChanged(to element: Element?, editable: Bool) -> Bool {
+        guard let element, editable else { return false }
+        if let field, same(field, element) { return false }
+        field = element
+        return true
+    }
+}
+
 /// Watches keyboard focus in the frontmost app through the Accessibility API:
 /// focus moves mean the text before the caret is unknown (commit), and a focused password
 /// field means autohan0 must type exactly what was pressed (bypass).
@@ -16,6 +45,22 @@ final class FocusWatcher {
     private(set) var secure = false
     private var focusedIsSecureField = false
     private var timer: Timer?
+    private var filter = FocusFilter<AXUIElement>(same: { CFEqual($0, $1) })
+
+    private static let textRoles: Set<String> = [
+        kAXTextFieldRole as String, kAXTextAreaRole as String, kAXComboBoxRole as String, "AXSearchField",
+    ]
+
+    /// Can the user type into this element (text field, text area, combo box, contenteditable)?
+    static func isTextInput(_ el: AXUIElement) -> Bool {
+        var role: CFTypeRef?
+        if AXUIElementCopyAttributeValue(el, kAXRoleAttribute as CFString, &role) == .success,
+           let r = role as? String, textRoles.contains(r) {
+            return true
+        }
+        var settable: DarwinBoolean = false
+        return AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &settable) == .success && settable.boolValue
+    }
 
     init() {
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -49,7 +94,10 @@ final class FocusWatcher {
         let callback: AXObserverCallback = { _, _, _, refcon in
             guard let refcon else { return }
             let me = Unmanaged<FocusWatcher>.fromOpaque(refcon).takeUnretainedValue()
-            me.onFocusChanged?()
+            let focused = me.focusedElement()
+            if me.filter.focusChanged(to: focused, editable: focused.map(FocusWatcher.isTextInput) ?? false) {
+                me.onFocusChanged?()
+            }
             me.checkFocusedElement()
         }
         if AXObserverCreate(newPid, callback, &obs) == .success, let obs {
@@ -58,7 +106,17 @@ final class FocusWatcher {
             CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .defaultMode)
             observer = obs
         }
+        let focused = focusedElement()
+        filter.attached(to: focused, editable: focused.map(FocusWatcher.isTextInput) ?? false)
         checkFocusedElement()
+    }
+
+    private func focusedElement() -> AXUIElement? {
+        guard let appElement else { return nil }
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        return (focused as! AXUIElement)
     }
 
     /// Re-read the focused element soon (after a click focus may have moved without a notification).
