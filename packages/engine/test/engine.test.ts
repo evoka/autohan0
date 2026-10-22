@@ -253,3 +253,28 @@ describe('줄 끝 판정', () => {
     expect(new Engine({ mode: 'en' }).type('of\n').text).toBe('of\n');
   });
 });
+
+describe('숫자·따옴표 머리 + 한글 꼬리', () => {
+  it.each([
+    ['3kr', '3개'],
+    ['10;9s', '10분'],
+    ['v0.8.5y/', 'v0.8.5로'],
+    ['500jgw', '500을'],
+    ['3,000j9tsjgw', '3,000원을'],
+    ['3.14hgs', '3.14는'],
+    ['"contents"yfk/', '"contents"라고'],
+    ["World'hgs", "World'는"],
+  ])('A: %s → %s', (keys, text) => {
+    expect(new Engine({ mode: 'en' }).type(keys + ' ').text).toBe(text + ' ');
+  });
+
+  it('숫자 머리 뒤 한글은 음절 단위로 지워진다 (3kr␣ ⌫⌫ → 3)', () => {
+    // mid-word the shown "3kr" is kept (hysteresis); the space settles it to 3개
+    const e = new Engine({ mode: 'en' });
+    expect(e.type('3kr ').text).toBe('3개 ');
+    e.process({ type: 'backspace' });
+    const r = e.process({ type: 'backspace' });
+    expect(r.text).toBe('3');
+    expect(r.mode).toBe('en');
+  });
+});

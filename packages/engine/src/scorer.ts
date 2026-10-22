@@ -193,13 +193,16 @@ export class Scorer {
   }
 }
 
-// ㅋㅋ, ㅎㅎ, ㅠㅠ, ㅜㅜ, ㅡㅡ, ㅇㅇ, ㄴㄴ, ㄷㄷ: lone jamo repeated (2+ units).
+// ㅋㅋ, ㅎㅎ, ㅠㅠ, ㅜㅜ, ㅡㅡ, ㅇㅇ, ㄴㄴ, ㄷㄷ: the same lone jamo repeated (2+ units).
+// Mixed lone jamo (ㅠㅋ = the keys "50") are not an emoticon.
 const EMO_JAMO = new Set(['ᄏ', 'ᄒ', 'ᅲ', 'ᅮ', 'ᅳ', 'ᄋ', 'ᄂ', 'ᄃ']);
 function jamoEmoticon(units: Unit[]): number | null {
   if (units.length < 2) return null;
+  let first = '';
   for (const u of units) {
     const j = u.sym ? '' : isChoOnly(u) ? u.cho : !u.cho && u.jung && !u.jong ? u.jung : '';
-    if (!j || !EMO_JAMO.has(j)) return null;
+    if (!j || !EMO_JAMO.has(j) || (first && j !== first)) return null;
+    first = j;
   }
   return LOG(2e-4) + (units.length - 2) * LOG(0.5);
 }
