@@ -143,6 +143,46 @@ enum SelfTest {
     /// combo box (recorded 2026-10-22): window notices with the same field focused, then the
     /// suggestion list item, then the field again. None of them moved the caret; only another
     /// text field does.
+    /// Key releases: a press none of whose keyDowns reached the app is released only in autohan0;
+    /// once one did (a held Backspace whose repeats were partly turned into edits), its keyUp must
+    /// reach the app too, or the app thinks the key is still down and drops the next press of it.
+    static func keyUpFilterCheck() -> Bool {
+        let backspace = 0x33, j = 0x26, f19 = 0x50, ret = 0x24
+        var f = KeyUpFilter()
+        var ok = true
+        func expect(_ got: Bool, _ want: Bool, _ what: String) {
+            if got != want { print("  키 뗌: \(what) → 앱에 보냄 \(got), 기대 \(want)"); ok = false }
+        }
+        // held Backspace: passed, repeats passed, one repeat consumed (an edit), more repeats passed
+        f.keyDown(backspace, isRepeat: false, reachedApp: true)
+        f.keyDown(backspace, isRepeat: true, reachedApp: true)
+        f.keyDown(backspace, isRepeat: true, reachedApp: false)
+        f.keyDown(backspace, isRepeat: true, reachedApp: true)
+        expect(f.keyUp(backspace), true, "꾹 누른 ⌫ (중간 반복 하나를 편집으로 바꿈)")
+        // the same with the consumed repeat last
+        f.keyDown(backspace, isRepeat: false, reachedApp: true)
+        f.keyDown(backspace, isRepeat: true, reachedApp: false)
+        expect(f.keyUp(backspace), true, "꾹 누른 ⌫ (마지막 반복을 편집으로 바꿈)")
+        // a letter replaced by an edit: the app never saw it go down
+        f.keyDown(j, isRepeat: false, reachedApp: false)
+        expect(f.keyUp(j), false, "편집으로 바꾼 글자 키")
+        // the Han/Yeong key held: every keyDown swallowed
+        f.keyDown(f19, isRepeat: false, reachedApp: false)
+        f.keyDown(f19, isRepeat: true, reachedApp: false)
+        expect(f.keyUp(f19), false, "한/영 키")
+        // Return re-sent after a fix-up: the app saw it go down
+        f.keyDown(ret, isRepeat: false, reachedApp: true)
+        expect(f.keyUp(ret), true, "고친 뒤 다시 보낸 ⏎")
+        // first keyDown consumed, a later repeat reached the app
+        f.keyDown(j, isRepeat: false, reachedApp: false)
+        f.keyDown(j, isRepeat: true, reachedApp: true)
+        expect(f.keyUp(j), true, "처음은 바꾸고 반복은 보낸 키")
+        // a new press starts clean
+        f.keyDown(j, isRepeat: false, reachedApp: false)
+        expect(f.keyUp(j), false, "다시 누른 글자 키")
+        return ok
+    }
+
     static func focusFilterCheck() -> Bool {
         var f = FocusFilter<String>(same: ==)
         f.attached(to: "guests", editable: true)
@@ -207,6 +247,9 @@ enum SelfTest {
         let focusOK = focusFilterCheck()
         print("포커스 알림 걸러내기: \(focusOK ? "통과" : "실패")")
         if !focusOK { failedRequired += 1 }
+        let keyUpOK = keyUpFilterCheck()
+        print("키 뗌 전달: \(keyUpOK ? "통과" : "실패")")
+        if !keyUpOK { failedRequired += 1 }
 
         let warm = bridge.warmup()
         print(String(format: "워밍업 %.0f ms", warm))

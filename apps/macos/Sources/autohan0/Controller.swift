@@ -44,6 +44,41 @@ final class Typist {
     }
 }
 
+/// Which key releases (keyUp) go on to the app.
+///
+/// A press whose keyDown autohan0 dropped (a letter replaced by an edit, the Han/Yeong key) is
+/// released only here. But once any keyDown of the press has reached the app, so must its keyUp:
+/// a held Backspace auto-repeats, and autohan0 may turn one repeat into an edit; swallowing the
+/// release then left apps thinking Backspace was still down, and Claude's composer dropped the
+/// first Backspace of the next edit (김 → 기z-like leftovers: "i미안해", "'테스트").
+struct KeyUpFilter {
+    /// presses none of whose keyDowns reached the app
+    private var swallowed = Set<Int>()
+    /// presses with at least one keyDown in the app
+    private var reached = Set<Int>()
+
+    /// A keyDown was handled: `reachedApp` false when autohan0 dropped it (and maybe typed an edit).
+    mutating func keyDown(_ code: Int, isRepeat: Bool, reachedApp: Bool) {
+        if !isRepeat {
+            // a new press: forget what the previous press of this key did (its release may be lost)
+            swallowed.remove(code)
+            reached.remove(code)
+        }
+        if reachedApp {
+            reached.insert(code)
+            swallowed.remove(code)
+        } else if !reached.contains(code) {
+            swallowed.insert(code)
+        }
+    }
+
+    /// True: let this key's release through to the app.
+    mutating func keyUp(_ code: Int) -> Bool {
+        reached.remove(code)
+        return swallowed.remove(code) == nil
+    }
+}
+
 /// Per-key timing of the event tap (shown in the menu, written by --selftest for the engine alone).
 struct KeyStats {
     private(set) var count = 0
@@ -89,7 +124,7 @@ final class Controller: NSObject {
     private let typist = Typist()
     private var tap: CFMachPort?
     private var tapSource: CFRunLoopSource?
-    private var swallowedKeyUps = Set<Int>()
+    private var keyUps = KeyUpFilter()
     /// input-source changes before this time (ms) are undone without counting as the Han/Yeong key
     private var ignoreSwitchUntil = 0.0
     /// when an input-source change last counted as the Han/Yeong key (ms)
@@ -104,6 +139,11 @@ final class Controller: NSObject {
     private var pendingFlush: DispatchWorkItem?
     /// Recent toggle / input-source events for status.json (never typed text).
     private var trace: [String] = []
+    /// Recent key decisions for status.json: the kind of key (letter / digit / symbol / ⌫ …), never
+    /// which key, and what was done with it (passed, or deleted n and typed m characters).
+    private var keyLog: [String] = []
+    private static let letterCodes: Set<Int> = Set(QwertyKeys.pairs.filter { $0.1.isLetter }.map { $0.0 })
+    private static let digitCodes: Set<Int> = Set(QwertyKeys.pairs.filter { $0.1.isNumber }.map { $0.0 })
     static let statusRequest = Notification.Name("dev.autohan0.status")
     static var statusURL: URL { Store.directory.appendingPathComponent("status.json") }
 
@@ -139,7 +179,10 @@ final class Controller: NSObject {
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(writeStatus), name: Self.statusRequest, object: nil,
             suspensionBehavior: .deliverImmediately)
-        focus.onFocusChanged = { [weak self] in self?.caretMoved() }
+        focus.onFocusChanged = { [weak self] in
+            self?.logKey("reset: focus moved to another text field")
+            self?.caretMoved()
+        }
         focus.onSecureChanged = { [weak self] _ in self?.applyState() }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -214,6 +257,7 @@ final class Controller: NSObject {
         lastState = s
         bridge?.setStrict(isStrict)
         if s != prev {
+            logKey("state \(prev) → \(s)")
             switch s {
             case .active:
                 bridge?.setBypass(false)
@@ -255,6 +299,7 @@ final class Controller: NSObject {
         frontApp = app
         // "Automatically switch to a document's input source" may switch right after activation.
         ignoreSwitchUntil = Self.nowMs() + 500
+        logKey("reset: app switched")
         caretMoved()
         applyState()
         if state == .active { sources.selectASCII() }
@@ -328,12 +373,29 @@ final class Controller: NSObject {
         if trace.count > 40 { trace.removeFirst(trace.count - 40) }
     }
 
+    /// Key kind only: L letter, D digit, P other printable, ⌫ ␣ ⏎, ? anything else (+⇧ with Shift).
+    private static func keyKind(_ keyCode: Int, _ flags: CGEventFlags) -> String {
+        let k: String
+        switch keyCode {
+        case KeyCode.delete: k = "⌫"
+        case KeyCode.space: k = "␣"
+        case KeyCode.returnKey, KeyCode.keypadEnter: k = "⏎"
+        default: k = letterCodes.contains(keyCode) ? "L" : digitCodes.contains(keyCode) ? "D" : QwertyKeys.pairs.contains { $0.0 == keyCode } ? "P" : "?"
+        }
+        return flags.contains(.maskShift) ? k + "⇧" : k
+    }
+
+    private func logKey(_ s: String) {
+        keyLog.append(String(format: "%.0f ", Self.nowMs()) + s)
+        if keyLog.count > 400 { keyLog.removeFirst(keyLog.count - 400) }
+    }
+
     /// Answer to the "dev.autohan0.status" distributed notification (used by --inject).
     @objc private func writeStatus() {
         let status: [String: Any] = [
             "state": "\(state)", "mode": mode.rawValue, "layout": settings.layout, "trusted": trusted,
             "tap": tap != nil, "inputSource": sources.currentID, "shortcuts": shortcuts.map(AppDelegate.describe),
-            "stats": stats.summary ?? "", "trace": trace,
+            "stats": stats.summary ?? "", "trace": trace, "keys": keyLog,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? FileManager.default.createDirectory(at: Store.directory, withIntermediateDirectories: true)
@@ -431,6 +493,7 @@ final class Controller: NSObject {
             return pass
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             flushPending(proxy: proxy) // still belongs where the caret was
+            logKey("reset: click")
             caretMoved() // a click can move the caret anywhere
             focus.checkSoon()
             return pass
@@ -442,18 +505,25 @@ final class Controller: NSObject {
         if event.getIntegerValueField(.eventSourceUserData) == Typist.marker { return pass }
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if type == .keyUp {
-            return swallowedKeyUps.remove(keyCode) != nil ? nil : pass
+            return keyUps.keyUp(keyCode) ? pass : nil
         }
         let flags = event.flags
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        /// Every keyDown ends here, so the key's release is handled to match (see KeyUpFilter).
+        func done(_ result: Unmanaged<CGEvent>?, reachedApp: Bool? = nil) -> Unmanaged<CGEvent>? {
+            keyUps.keyDown(keyCode, isRepeat: isRepeat, reachedApp: reachedApp ?? (result != nil))
+            return result
+        }
 
         // ⌃⌥W turns autohan0 on and off in every state.
         if keyCode == KeyCode.w, flags.contains(.maskControl), flags.contains(.maskAlternate), !flags.contains(.maskCommand) {
-            swallowedKeyUps.insert(keyCode)
             if !isRepeat { DispatchQueue.main.async { [weak self] in self.map { $0.setEnabled(!$0.settings.enabled) } } }
-            return nil
+            return done(nil)
         }
-        guard state == .active, let bridge else { return pass }
+        guard state == .active, let bridge else {
+            logKey("\(Self.keyKind(keyCode, flags)) skipped (\(state))")
+            return done(pass)
+        }
         let t0 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         let now = Self.nowMs()
 
@@ -461,9 +531,9 @@ final class Controller: NSObject {
         let modsOnly = flags.rawValue & SwitchShortcut.relevant
         if shortcuts.contains(where: { $0.matches(keyCode: keyCode, flags: flags) })
             || (settings.shiftSpaceToggle && keyCode == KeyCode.space && modsOnly == CGEventFlags.maskShift.rawValue) {
-            swallowedKeyUps.insert(keyCode)
             if !isRepeat {
                 let a = bridge.toggle(now: now)
+                logKey("한/영 → \(a.mode.rawValue)" + (a.hasEdit ? " edit del\(a.deleteCount)+\(a.insert.count) (0.25s later)" : ""))
                 setMode(a.mode)
                 // macOS still switches the input source for its own shortcut: that switch is undone in
                 // osSwitchedAway without counting twice, and the edit waits until ABC is back.
@@ -475,14 +545,15 @@ final class Controller: NSObject {
                     if a.learnedChanged { self?.saveLearned() }
                 }
             }
-            return nil
+            return done(nil)
         }
         // A held-back Han/Yeong edit goes before this key (another Han/Yeong press just appends to it).
         if !pendingEdit.isEmpty { flushPending(proxy: proxy) }
         // 🌐 + key (system shortcuts), arrows, Home/End, F-keys: the caret or focus may move.
         if flags.contains(.maskSecondaryFn) {
+            logKey("\(Self.keyKind(keyCode, flags)) with fn: reset")
             bridge.caretMoved()
-            return pass
+            return done(pass)
         }
 
         var mods = 0
@@ -493,21 +564,28 @@ final class Controller: NSObject {
         if flags.contains(.maskCommand) { mods |= EngineMod.command }
         let a = bridge.keyDown(keyCode, mods: mods, now: now)
         let t1 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        do {
+            var s = "[\(mode.rawValue)] " + Self.keyKind(keyCode, flags)
+            if isRepeat { s += "(repeat)" }
+            if mods & (EngineMod.control | EngineMod.option | EngineMod.command) != 0 { s += " with ⌃⌥⌘: reset," }
+            s += a.consume ? " → del\(a.deleteCount)+\(a.insert.count)" + (a.thenOriginal ? "+key" : "") : " → pass"
+            logKey(s + " \(a.mode.rawValue)")
+        }
         setMode(a.mode)
         if a.learnedChanged { DispatchQueue.main.async { [weak self] in self?.saveLearned() } }
         guard a.consume else {
             stats.add(engine: t1 - t0, total: clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - t0)
-            return pass
+            return done(pass)
         }
         var evs = typist.events(deleteCount: a.deleteCount, insert: a.insert)
+        var resent = false
         if a.thenOriginal, let original = event.copy() {
             evs.append(original) // Return keeps its own meaning (send, run) after the fix-up
-        } else {
-            swallowedKeyUps.insert(keyCode)
+            resent = true
         }
         typist.send(evs, proxy: proxy)
         stats.add(engine: t1 - t0, total: clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - t0)
-        return nil
+        return done(nil, reachedApp: resent)
     }
 
     /// Put autohan0 (back) into the Accessibility list, e.g. after a rebuild invalidated the old entry.
